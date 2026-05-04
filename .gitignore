@@ -1,0 +1,9 @@
+.vscode/
+vendor/
+.env
+dist/
+tmp/
+.idea/
+storage/
+.DS_Store
+todo_tree.example

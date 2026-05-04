@@ -1,0 +1,239 @@
+name: "Build and Deploy to Cloud Run"
+
+on:
+  push:
+    branches:
+      # - develop
+      - specs/*
+      - uat/*
+    #   - 'release/*'
+    #   - staging
+    # tags:
+    #   - 'v*.*.*'
+
+env:
+  PROJECT_ID: ${{ vars.PROJECT_ID }}
+  REGION: ${{ vars.REGION }}
+  CLUSTER_NAME: ${{ vars.CLUSTER_NAME }}
+  NAMESPACE: ${{ vars.NAMESPACE }}
+  SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+
+  HELM_URL: ${{ vars.HELM_URL }}
+  HELM_USERNAME: ${{ vars.HELM_USERNAME }}
+  HELM_CHART: ${{ vars.HELM_CHART }}
+
+  ENVIRONMENT_NAME: ${{
+    startsWith(github.ref, 'refs/heads/specs') && 'staging' ||
+    startsWith(github.ref, 'refs/heads/uat') && 'uat' ||
+    ''
+    }}
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+
+    outputs:
+      image-built: ${{ steps.build_status.outputs.built }}
+      image: ${{ steps.build_status.outputs.image }}
+    environment:
+      name: ${{
+        startsWith(github.ref, 'refs/heads/specs') && 'staging' ||
+        startsWith(github.ref, 'refs/heads/uat') && 'uat' ||
+        ''
+        }}
+
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
+
+      # Configure Workload Identity Federation and generate an access token.
+      #
+      # See https://github.com/google-github-actions/auth for more options,
+      # including authenticating via a JSON credentials file.
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
+        with:
+          credentials_json: "${{ secrets.GOOGLE_CREDENTIALS }}"
+          token_format: "access_token"
+
+      # BEGIN - Docker auth and build
+      #
+      # If you already have a container image, you can omit these steps.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: "Docker Auth"
+        uses: "docker/login-action@v3"
+        with:
+          username: "oauth2accesstoken"
+          password: "${{ steps.auth.outputs.access_token }}"
+          registry: "${{ env.REGION }}-docker.pkg.dev"
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install kubectl component
+        run: gcloud components install kubectl
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --zone ${{ env.REGION }} --project ${{ env.PROJECT_ID }}
+
+      - name: Set Google OAuth Access Token
+        run: |
+          echo "GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token)" >> $GITHUB_ENV
+
+      - name: Install helm
+        uses: azure/setup-helm@v4.3.0
+        # with:
+        # version: '<version>' # default is latest (stable)
+
+      - name: Setup CNCF SOPS
+        uses: ronazst/setup-cncf-sops@v1
+        # with:
+        # version: '<version>' # optional, default is latest stable
+
+      - name: init helm
+        run: |
+          helm plugin install https://github.com/jkroepke/helm-secrets
+          helm repo add dep ${{ env.HELM_URL }} --username ${{ env.HELM_USERNAME }} --password ${{ secrets.HELM_PASSWORD }}
+
+      - name: "Set image"
+        id: image
+        run: |
+          REPO="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ENVIRONMENT_NAME }}/${{ github.repository }}"
+          echo "repo=${REPO}" >> $GITHUB_OUTPUT
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAGS="${REPO}:${SHORT_SHA}"
+
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAGS="${TAGS},${REPO}:${{ github.ref_name }}"
+            SPECS_VERSION="${{ github.ref_name }}"
+            echo "specs_version=${SPECS_VERSION}" >> $GITHUB_OUTPUT
+            echo "tag=${BRANCH_TAG}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == *"uat"* ]]; then
+            REF_NAME="${{ github.ref_name }}"
+            SPECS_VERSION="${REF_NAME##*/}"
+            BRANCH_TAG="${REF_NAME##*/}"
+            TAGS="${TAGS},${REPO}:${BRANCH_TAG}"
+            echo "specs_version=${SPECS_VERSION}" >> $GITHUB_OUTPUT
+            echo "tag=${BRANCH_TAG}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == *"specs"* ]]; then
+            REF_NAME="${{ github.ref_name }}"
+            SPECS_VERSION="${REF_NAME##*/}"
+            BRANCH_TAG="${REF_NAME##*/}-${SHORT_SHA}"
+            TAGS="${TAGS},${REPO}:${BRANCH_TAG}"
+            echo "specs_version=${SPECS_VERSION}" >> $GITHUB_OUTPUT
+            echo "tag=${BRANCH_TAG}" >> $GITHUB_OUTPUT
+          else
+            TAGS="${TAGS},${REPO}:latest"
+            echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "image=${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push new image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          cache-from: type=registry,ref=${{ steps.image.outputs.repo }}:cache
+          cache-to: type=registry,ref=${{ steps.image.outputs.repo }}:cache,mode=max
+          tags: ${{ steps.image.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.image.outputs.tag }}
+            SPECS_VERSION=${{ steps.image.outputs.specs_version || 'latest' }}
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+      - name: Deploy Helm chart to GKE
+        env:
+          HELM_VALUES: ${{ secrets.HELM_VALUES }}
+        run: |
+          export GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          # Create helm values file
+          printf '%s\n' "$HELM_VALUES" > values-secret.yaml
+
+          # Deploy with helm secrets
+            helm secrets upgrade --install ${{ env.SERVICE_NAME }} dep/${{ env.HELM_CHART }} \
+            -f values-secret.yaml \
+            --namespace ${{ env.NAMESPACE }} \
+            --set image.repository=${{ steps.image.outputs.repo }} \
+            --set image.tag=${{ steps.image.outputs.tag }} \
+            --wait
+
+      - name: Clean up secrets file
+        if: always()
+        run: |
+          rm -f values-secret.yaml
+
+  security-scan:
+    needs:
+      - build-and-deploy
+    runs-on: self-hosted
+
+    environment:
+      name: ${{
+        startsWith(github.ref, 'refs/heads/specs') && 'staging' ||
+        startsWith(github.ref, 'refs/heads/uat') && 'uat' ||
+        ''
+        }}
+
+    permissions:
+      contents: "read"
+
+    steps:
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
+        with:
+          credentials_json: "${{ secrets.GOOGLE_CREDENTIALS }}"
+          token_format: "access_token"
+
+      - name: "Docker Auth"
+        uses: "docker/login-action@v3"
+        with:
+          username: "oauth2accesstoken"
+          password: "${{ steps.auth.outputs.access_token }}"
+          registry: "${{ vars.REGION }}-docker.pkg.dev"
+      - name: Manual Trivy Setup
+        uses: aquasecurity/setup-trivy@v0.2.4
+        with:
+          cache: true
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.33.1
+        continue-on-error: true
+        with:
+          skip-setup-trivy: true
+          image-ref: ${{ needs.build-and-deploy.outputs.image }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 0
+
+  notification:
+    if: always()
+    needs:
+      - build-and-deploy
+    runs-on: self-hosted
+
+    environment:
+      name: ${{
+        startsWith(github.ref, 'refs/heads/specs') && 'staging' ||
+        startsWith(github.ref, 'refs/heads/uat') && 'uat' ||
+        ''
+        }}
+
+    steps:
+      - name: call webhook
+        env:
+          NOTIFICATION_WEBHOOK: ${{ vars.NOTIFICATION_WEBHOOK }}
+        run: |
+          curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"env":${{toJson(env)}},"github":${{toJson(github)}},"needs":${{toJson(needs)}}}' \
+          $NOTIFICATION_WEBHOOK

@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@commitlint/cli": "^19.7.1",
+    "@commitlint/config-conventional": "^19.7.1"
+  },
+  "scripts": {
+    "init-husky": "npx husky init && cd .husky && rm pre-commit && cd ..",
+    "prepare": "husky"
+  }
+}

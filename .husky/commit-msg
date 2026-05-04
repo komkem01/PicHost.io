@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+
+ms=$(cat "$1")
+
+pattern="^[a-zA-Z]+: \[(api|gw|auth|infa)\] .+$"
+
+if echo "$ms" | grep -Eq "$pattern"; then
+  echo "Commit message format is correct."
+else
+  echo "Commit message format is incorrect. Please use the format: '<type>: [api|gw|auth] description !!!!'"
+  exit 1
+fi
+
+# Run commitlint
+npx --no -- commitlint --edit "$1"
