@@ -27,6 +27,8 @@ func (s *Service) CreateUser(ctx context.Context, user entitiesdto.CreateUser) (
 	}
 	_, err := s.db.NewInsert().
 		Model(data).
+		Column("email", "password", "username", "plan", "is_active", "is_guest", "created_at", "updated_at").
+		Returning("*").
 		Exec(ctx)
 	if err != nil {
 		return nil, err

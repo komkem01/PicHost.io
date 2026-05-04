@@ -45,6 +45,7 @@ func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
 	image := r.Group("/images")
 	{
+		image.POST("", mod.Image.Ctl.CreateImage)
 		image.GET("/:id", mod.Image.Ctl.GetImage)
 		image.GET("/presign-url", mod.Image.Ctl.GetPresignURL)
 	}

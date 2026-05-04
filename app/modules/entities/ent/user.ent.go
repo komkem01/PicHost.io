@@ -24,8 +24,8 @@ type UserEntity struct {
 	Password  *string   `bun:"password"`
 	Username  *string   `bun:"username"`
 	Plan      PlanType  `bun:"plan,type:plan_type,notnull,default:'Free'"`
-	IsActive  bool      `bun:"is_active,notnull,default:true"`
-	IsGuest   bool      `bun:"is_guest,notnull,default:true"`
+	IsActive  bool      `bun:"is_active,notnull"`
+	IsGuest   bool      `bun:"is_guest,notnull"`
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp"`
 	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp"`
 }

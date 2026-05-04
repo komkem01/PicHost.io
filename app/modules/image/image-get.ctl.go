@@ -33,7 +33,7 @@ func (c *Controller) GetImage(ctx *gin.Context) {
 
 	item, err := c.svc.GetImage(ctx.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, ErrImageNotFound) {
+		if errors.Is(err, ErrImageNotFound) || errors.Is(err, ErrImageExpired) {
 			_ = base.JSON(ctx, 404, i18n.ImageNotFound, nil, nil)
 			return
 		}

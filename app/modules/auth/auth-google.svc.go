@@ -137,6 +137,10 @@ func (s *Service) findOrLinkGoogleIdentity(ctx context.Context, userinfo *google
 		if createErr != nil {
 			return nil, createErr
 		}
+
+		// Initialise quota row for the new Google user (best-effort).
+		_, _ = s.quotaEnt.UpsertUserQuota(ctx, created.ID)
+
 		user = created
 	}
 

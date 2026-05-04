@@ -2,6 +2,7 @@ package entitiesinf
 
 import (
 	"context"
+	"time"
 
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	"pichost.io/app/modules/entities/ent"
@@ -45,6 +46,7 @@ type ImageEntity interface {
 	GetImageByID(ctx context.Context, id uuid.UUID) (*ent.ImageEntity, error)
 	UpdateImage(ctx context.Context, id uuid.UUID, image entitiesdto.UpdateImage) (*ent.ImageEntity, error)
 	DeleteImage(ctx context.Context, id uuid.UUID) error
+	ListExpiredImages(ctx context.Context, before time.Time) ([]*ent.ImageEntity, error)
 }
 
 type AuthEntity interface {
@@ -55,4 +57,10 @@ type AuthEntity interface {
 	RevokeAuthSessionsByUserID(ctx context.Context, userID uuid.UUID) error
 	CreateOAuthAccount(ctx context.Context, account entitiesdto.CreateOAuthAccount) (*ent.OAuthAccountEntity, error)
 	GetOAuthAccountByProviderUserID(ctx context.Context, provider string, providerUserID string) (*ent.OAuthAccountEntity, error)
+}
+
+type UserQuotaEntity interface {
+	GetUserQuota(ctx context.Context, userID uuid.UUID) (*ent.UserQuotaEntity, error)
+	UpsertUserQuota(ctx context.Context, userID uuid.UUID) (*ent.UserQuotaEntity, error)
+	AddToUserQuota(ctx context.Context, userID uuid.UUID, delta entitiesdto.AddToUserQuota) (*ent.UserQuotaEntity, error)
 }

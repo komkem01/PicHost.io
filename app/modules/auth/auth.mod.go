@@ -28,7 +28,7 @@ type Config struct {
 	GoogleStateTTLSeconds  int
 }
 
-func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity) *Module {
+func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity, quotaEnt entitiesinf.UserQuotaEntity) *Module {
 	tracer := otel.Tracer("pichost.io.modules.auth")
 	if conf.Val.AccessTokenTTLSeconds <= 0 {
 		conf.Val.AccessTokenTTLSeconds = 900
@@ -50,10 +50,11 @@ func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt en
 	}
 
 	svc := newService(&Options{
-		Config: conf,
-		tracer: tracer,
-		user:   userEnt,
-		auth:   authEnt,
+		Config:   conf,
+		tracer:   tracer,
+		user:     userEnt,
+		auth:     authEnt,
+		quotaEnt: quotaEnt,
 	})
 
 	return &Module{

@@ -4,6 +4,7 @@ type CreateImage struct {
 	UserID    *string `json:"user_id"`
 	StorageID *string `json:"storage_id"`
 	IsPrivate *bool   `json:"is_private"`
+	ExpiresAt *string `json:"expires_at"` // RFC3339, set for guest images
 }
 
 type UpdateImage struct {

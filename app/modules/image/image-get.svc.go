@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"pichost.io/app/modules/entities/ent"
 
@@ -18,6 +19,13 @@ func (s *Service) GetImage(ctx context.Context, id uuid.UUID) (*ent.ImageEntity,
 		}
 		return nil, err
 	}
+
+	// Lazy delete: if expires_at is set and in the past, delete and return 404.
+	if item.ExpiresAt != nil && time.Now().After(*item.ExpiresAt) {
+		_ = s.image.DeleteImage(ctx, id)
+		return nil, ErrImageExpired
+	}
+
 	return item, nil
 }
 

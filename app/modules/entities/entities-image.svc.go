@@ -15,13 +15,17 @@ import (
 var _ entitiesinf.ImageEntity = (*Service)(nil)
 
 func (s *Service) CreateImage(ctx context.Context, image entitiesdto.CreateImage) (*ent.ImageEntity, error) {
-	if image.UserID == nil || image.StorageID == nil {
-		return nil, fmt.Errorf("user_id and storage_id are required")
+	if image.StorageID == nil {
+		return nil, fmt.Errorf("storage_id is required")
 	}
 
-	userID, err := uuid.Parse(*image.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user_id: %w", err)
+	var userIDPtr *uuid.UUID
+	if image.UserID != nil {
+		parsed, err := uuid.Parse(*image.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid user_id: %w", err)
+		}
+		userIDPtr = &parsed
 	}
 	storageID, err := uuid.Parse(*image.StorageID)
 	if err != nil {
@@ -33,11 +37,21 @@ func (s *Service) CreateImage(ctx context.Context, image entitiesdto.CreateImage
 		isPrivate = *image.IsPrivate
 	}
 
+	var expiresAt *time.Time
+	if image.ExpiresAt != nil {
+		t, err := time.Parse(time.RFC3339, *image.ExpiresAt)
+		if err != nil {
+			return nil, fmt.Errorf("invalid expires_at: %w", err)
+		}
+		expiresAt = &t
+	}
+
 	now := time.Now()
 	data := &ent.ImageEntity{
-		UserID:    userID,
+		UserID:    userIDPtr,
 		StorageID: storageID,
 		IsPrivate: isPrivate,
+		ExpiresAt: expiresAt,
 		CreatedAt: now,
 	}
 
@@ -112,4 +126,17 @@ func (s *Service) DeleteImage(ctx context.Context, id uuid.UUID) error {
 		Where("id = ?", id).
 		Exec(ctx)
 	return err
+}
+
+// ListExpiredImages returns all images whose expires_at is set and before the given time.
+func (s *Service) ListExpiredImages(ctx context.Context, before time.Time) ([]*ent.ImageEntity, error) {
+	var images []*ent.ImageEntity
+	err := s.db.NewSelect().
+		Model(&images).
+		Where("expires_at IS NOT NULL AND expires_at <= ?", before).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return images, nil
 }

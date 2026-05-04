@@ -3,6 +3,7 @@ package config
 import (
 	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/image"
+	"pichost.io/app/modules/quota"
 
 	"pichost.io/app/modules/example"
 	exampletwo "pichost.io/app/modules/example-two"
@@ -46,6 +47,7 @@ type Config struct {
 	User    users.Config
 	Storage storage.Config
 	Image   image.Config
+	Quota   quota.Config
 }
 
 var App = Config{
@@ -88,4 +90,5 @@ var App = Config{
 	},
 	User:  users.Config{},
 	Image: image.Config{},
+	Quota: quota.Config{},
 }

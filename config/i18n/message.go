@@ -21,4 +21,10 @@ var (
 	ImageNotFound          = "image-not-found"
 	ImageURLNotFound       = "image-url-not-found"
 	ImagePresignURLFetched = "image-presign-url-fetched"
+	ImageCreated           = "image-created"
+	ImageQuotaExceeded     = "image-quota-exceeded"
+	ImageFileTooLarge      = "image-file-too-large"
+	ImageLimitReached      = "image-limit-reached"
+	ImageMIMENotAllowed    = "image-mime-not-allowed"
+	ImageExpired           = "image-expired"
 )

@@ -24,25 +24,28 @@ import (
 )
 
 type Service struct {
-	tracer trace.Tracer
-	user   entitiesinf.UserEntity
-	auth   entitiesinf.AuthEntity
-	conf   *config.Config[Config]
+	tracer   trace.Tracer
+	user     entitiesinf.UserEntity
+	auth     entitiesinf.AuthEntity
+	quotaEnt entitiesinf.UserQuotaEntity
+	conf     *config.Config[Config]
 }
 
 type Options struct {
 	*config.Config[Config]
-	tracer trace.Tracer
-	user   entitiesinf.UserEntity
-	auth   entitiesinf.AuthEntity
+	tracer   trace.Tracer
+	user     entitiesinf.UserEntity
+	auth     entitiesinf.AuthEntity
+	quotaEnt entitiesinf.UserQuotaEntity
 }
 
 func newService(opt *Options) *Service {
 	return &Service{
-		tracer: opt.tracer,
-		user:   opt.user,
-		auth:   opt.auth,
-		conf:   opt.Config,
+		tracer:   opt.tracer,
+		user:     opt.user,
+		auth:     opt.auth,
+		quotaEnt: opt.quotaEnt,
+		conf:     opt.Config,
 	}
 }
 
@@ -97,6 +100,9 @@ func (s *Service) Register(ctx context.Context, req RegisterRequestService, user
 	if err != nil {
 		return nil, err
 	}
+
+	// Initialise quota row for the new user (best-effort — do not block auth).
+	_, _ = s.quotaEnt.UpsertUserQuota(ctx, created.ID)
 
 	return s.issueAuth(ctx, created, userAgent, ip)
 }

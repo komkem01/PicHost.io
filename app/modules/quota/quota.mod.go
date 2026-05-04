@@ -1,8 +1,7 @@
-package image
+package quota
 
 import (
 	entitiesinf "pichost.io/app/modules/entities/inf"
-	"pichost.io/app/modules/quota"
 	"pichost.io/internal/config"
 
 	"go.opentelemetry.io/otel"
@@ -12,29 +11,27 @@ import (
 type Module struct {
 	tracer trace.Tracer
 	Svc    *Service
-	Ctl    *Controller
 }
 
 type Config struct{}
 
 func New(
 	conf *config.Config[Config],
+	userEnt entitiesinf.UserEntity,
+	quotaEnt entitiesinf.UserQuotaEntity,
 	imageEnt entitiesinf.ImageEntity,
-	storageEnt entitiesinf.StorageEntity,
-	quotaSvc *quota.Service,
 ) *Module {
-	tracer := otel.Tracer("pichost.io.modules.image")
+	tracer := otel.Tracer("pichost.io.modules.quota")
 	svc := newService(&Options{
 		Config:   conf,
 		tracer:   tracer,
-		image:    imageEnt,
-		store:    storageEnt,
-		quotaSvc: quotaSvc,
+		userEnt:  userEnt,
+		quotaEnt: quotaEnt,
+		imageEnt: imageEnt,
 	})
 
 	return &Module{
 		tracer: tracer,
 		Svc:    svc,
-		Ctl:    newController(tracer, svc),
 	}
 }
