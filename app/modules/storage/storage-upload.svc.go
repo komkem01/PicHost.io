@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	entitiesdto "pichost.io/app/modules/entities/dto"
@@ -46,16 +47,30 @@ func (s *Service) Upload(ctx context.Context, req UploadRequestService) (*ent.St
 	path := objectPath
 	url := objectURL
 
-	created, err := s.store.CreateStorage(ctx, entitiesdto.CreateStorage{
-		Provider: provider,
-		Path:     &path,
-		URL:      &url,
-		FileSize: finalSize,
-		MIMEType: &finalMIME,
-	})
-	if err != nil {
-		return nil, err
+	var lastErr error
+	for i := 0; i < 5; i++ {
+		shortCode, genErr := s.generateShortCode(storageShortCodeLength)
+		if genErr != nil {
+			return nil, genErr
+		}
+
+		created, createErr := s.store.CreateStorage(ctx, entitiesdto.CreateStorage{
+			ShortCode: shortCode,
+			Provider:  provider,
+			Path:      &path,
+			URL:       &url,
+			FileSize:  finalSize,
+			MIMEType:  &finalMIME,
+		})
+		if createErr == nil {
+			return created, nil
+		}
+
+		lastErr = createErr
+		if !s.isShortCodeUniqueConflict(createErr) {
+			return nil, createErr
+		}
 	}
 
-	return created, nil
+	return nil, fmt.Errorf("failed to generate unique short code after retries: %w", lastErr)
 }

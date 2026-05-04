@@ -15,6 +15,10 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 	app.GET("/healthz", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, nil)
 	})
+	app.GET("/p/:code", mod.Storage.Ctl.OpenPublicByCode)
+	app.HEAD("/p/:code", mod.Storage.Ctl.OpenPublicByCode)
+	app.GET("/i/:id", mod.Storage.Ctl.OpenPublic)
+	app.HEAD("/i/:id", mod.Storage.Ctl.OpenPublic)
 
 	app.Use(otelgin.Middleware(mod.Conf.Svc.Config().AppName),
 		// Middleware add trace id to response header

@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +19,7 @@ import (
 	"pichost.io/internal/config"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.opentelemetry.io/otel/trace"
@@ -48,6 +51,8 @@ type uploadSource struct {
 	ContentType string
 	Filename    string
 }
+
+const storageShortCodeLength = 8
 
 type s3Config struct {
 	Endpoint        string
@@ -270,4 +275,40 @@ func (s *Service) PresignStorage(ctx context.Context, item *ent.StorageEntity) (
 		return "", err
 	}
 	return s.signObjectPath(ctx, objectPath)
+}
+
+func (s *Service) generateShortCode(length int) (string, error) {
+	if length < 6 || length > 8 {
+		return "", fmt.Errorf("invalid short code length: %d", length)
+	}
+
+	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+	b := make([]byte, length)
+	max := byte(len(alphabet))
+
+	for i := 0; i < length; i++ {
+		buf := []byte{0}
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
+		b[i] = alphabet[buf[0]%max]
+	}
+
+	return string(b), nil
+}
+
+func (s *Service) isShortCodeUniqueConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	if pgErr.Code != "23505" {
+		return false
+	}
+
+	constraint := strings.ToLower(pgErr.ConstraintName)
+	message := strings.ToLower(pgErr.Message)
+	detail := strings.ToLower(pgErr.Detail)
+
+	return strings.Contains(constraint, "short_code") || strings.Contains(message, "short_code") || strings.Contains(detail, "short_code")
 }

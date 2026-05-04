@@ -39,5 +39,9 @@ func (c *Controller) Upload(ctx *gin.Context) {
 		return
 	}
 
-	base.Success(ctx, toStorageResponse(item))
+	res := toStorageResponse(item)
+	publicURL := buildStoragePublicURL(ctx, res.ID, res.ShortCode)
+	res.PublicURL = &publicURL
+
+	base.Success(ctx, res)
 }

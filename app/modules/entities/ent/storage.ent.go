@@ -11,6 +11,7 @@ type StorageEntity struct {
 	bun.BaseModel `bun:"table:storages,alias:s"`
 
 	ID        uuid.UUID `bun:"id,pk,type:uuid,default:gen_random_uuid()"`
+	ShortCode string    `bun:"short_code,notnull"`
 	Provider  string    `bun:"provider,notnull,default:'Railway'"`
 	Path      *string   `bun:"path"`
 	URL       *string   `bun:"url"`

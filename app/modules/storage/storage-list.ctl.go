@@ -16,7 +16,10 @@ func (c *Controller) ListFiles(ctx *gin.Context) {
 
 	res := make([]StorageResponseController, 0, len(items))
 	for _, item := range items {
-		res = append(res, toStorageResponse(item))
+		row := toStorageResponse(item)
+		publicURL := buildStoragePublicURL(ctx, row.ID, row.ShortCode)
+		row.PublicURL = &publicURL
+		res = append(res, row)
 	}
 
 	base.Success(ctx, res)

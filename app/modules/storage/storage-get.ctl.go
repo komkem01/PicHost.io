@@ -16,8 +16,9 @@ type getFileURI struct {
 }
 
 type getPresignURLQuery struct {
-	ID  string `form:"id"`
-	URL string `form:"url"`
+	ID   string `form:"id"`
+	Code string `form:"code"`
+	URL  string `form:"url"`
 }
 
 func (c *Controller) GetFile(ctx *gin.Context) {
@@ -43,7 +44,11 @@ func (c *Controller) GetFile(ctx *gin.Context) {
 		return
 	}
 
-	base.Success(ctx, toStorageResponse(item))
+	res := toStorageResponse(item)
+	publicURL := buildStoragePublicURL(ctx, res.ID, res.ShortCode)
+	res.PublicURL = &publicURL
+
+	base.Success(ctx, res)
 }
 
 func (c *Controller) GetPresignURL(ctx *gin.Context) {
@@ -64,6 +69,8 @@ func (c *Controller) GetPresignURL(ctx *gin.Context) {
 		}
 
 		item, err = c.svc.GetPresignURLByID(ctx.Request.Context(), id)
+	} else if req.Code != "" {
+		item, err = c.svc.GetPresignURLByShortCode(ctx.Request.Context(), req.Code)
 	} else if req.URL != "" {
 		item, err = c.svc.GetPresignURL(ctx.Request.Context(), req.URL)
 	} else {

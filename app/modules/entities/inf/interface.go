@@ -34,6 +34,7 @@ type UserEntity interface {
 type StorageEntity interface {
 	CreateStorage(ctx context.Context, storage entitiesdto.CreateStorage) (*ent.StorageEntity, error)
 	GetStorageByID(ctx context.Context, id uuid.UUID) (*ent.StorageEntity, error)
+	GetStorageByShortCode(ctx context.Context, shortCode string) (*ent.StorageEntity, error)
 	GetListStorage(ctx context.Context) ([]*ent.StorageEntity, error)
 	GetStorageByURL(ctx context.Context, url string) (*ent.StorageEntity, error)
 	GetStorageByEmail(ctx context.Context, email string) (*ent.StorageEntity, error)

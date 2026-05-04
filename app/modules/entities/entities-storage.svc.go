@@ -17,6 +17,7 @@ var _ entitiesinf.StorageEntity = (*Service)(nil)
 func (s *Service) CreateStorage(ctx context.Context, storage entitiesdto.CreateStorage) (*ent.StorageEntity, error) {
 	now := time.Now()
 	data := &ent.StorageEntity{
+		ShortCode: storage.ShortCode,
 		Provider:  storage.Provider,
 		Path:      storage.Path,
 		URL:       storage.URL,
@@ -39,6 +40,18 @@ func (s *Service) GetStorageByID(ctx context.Context, id uuid.UUID) (*ent.Storag
 	err := s.db.NewSelect().
 		Model(&storage).
 		Where("id = ?", id).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &storage, nil
+}
+
+func (s *Service) GetStorageByShortCode(ctx context.Context, shortCode string) (*ent.StorageEntity, error) {
+	var storage ent.StorageEntity
+	err := s.db.NewSelect().
+		Model(&storage).
+		Where("short_code = ?", shortCode).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -88,6 +101,10 @@ func (s *Service) UpdateStorage(ctx context.Context, id uuid.UUID, storage entit
 		Where("id = ?", id)
 
 	updated := 0
+	if storage.ShortCode != nil {
+		query = query.Set("short_code = ?", *storage.ShortCode)
+		updated++
+	}
 	if storage.Provider != nil {
 		query = query.Set("provider = ?", *storage.Provider)
 		updated++
