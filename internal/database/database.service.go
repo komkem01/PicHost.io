@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	dto "mcop/internal/database/dto"
+	dto "pichost.io/internal/database/dto"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"

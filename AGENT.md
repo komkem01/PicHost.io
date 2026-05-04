@@ -1,4 +1,4 @@
-# AI Agent Instructions - MCOP Storage Service
+# AI Agent Instructions - pichost.io Storage Service
 
 > Optimized for: Cursor, Windsurf, Claude, and other AI development assistants
 
@@ -86,7 +86,7 @@ Every module follows this structure:
 package mymodule
 
 import (
-    "mcop/internal/config"
+    "pichost.io/internal/config"
     "go.opentelemetry.io/otel"
     "go.opentelemetry.io/otel/trace"
 )
@@ -127,7 +127,7 @@ type Controller struct {
 
 // Constructor
 func New(conf *config.Config[Config], dependencies...) *Module {
-    tracer := otel.Tracer("mcop.service_name.module_name")
+    tracer := otel.Tracer("pichost.io.service_name.module_name")
     svc := newService(&Options{
         Config: conf,
         tracer: tracer,
@@ -274,7 +274,7 @@ func (c *Controller) Create(ctx *gin.Context) {
 
 ```go
 import "log/slog"
-import "mcop/internal/log"
+import "pichost.io/internal/log"
 
 // Get logger with structured fields (standalone usage)
 logger := log.With(slog.String("module", "mymodule"))
@@ -349,7 +349,7 @@ if err != nil {
 Modules needing cleanup implement `provider.Close`:
 
 ```go
-import "mcop/internal/provider"
+import "pichost.io/internal/provider"
 
 var _ provider.Close = (*Service)(nil)
 
@@ -487,7 +487,7 @@ Key environment variables to configure:
 
 ```bash
 # Application
-APP_NAME=mcop-storage-service
+APP_NAME=pichost.io-storage-service
 APP_KEY=your-app-key
 ENVIRONMENT=local|development|uat|production
 PORT=8080
@@ -613,7 +613,7 @@ OTEL_ENABLE=true
 OTEL_COLLECTOR_ENDPOINT=localhost:4317
 
 # Check tracer is initialized with correct naming
-tracer := otel.Tracer("mcop.service_name.module_name")
+tracer := otel.Tracer("pichost.io.service_name.module_name")
 
 # Ensure context is passed through
 ctx, span := s.tracer.Start(ctx, "operation")

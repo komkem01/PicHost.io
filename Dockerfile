@@ -6,7 +6,7 @@ COPY . /app
 RUN mkdir -p /app/dist
 ARG VERSION=dev
 ENV VERSION=${VERSION}
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X mcop/internal/config.version=${VERSION}" -modcacherw -o ./dist/ .;
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X pichost.io/internal/config.version=${VERSION}" -modcacherw -o ./dist/ .;
 FROM gcr.io/distroless/static AS serve
 WORKDIR /app
 COPY --from=builder /app/dist/ /app/

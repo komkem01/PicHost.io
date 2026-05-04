@@ -11,12 +11,12 @@ import (
 	"strconv"
 	"unicode"
 
-	ci18n "mcop/config/i18n"
+	ci18n "pichost.io/config/i18n"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 
-	msg "mcop/config/i18n"
+	msg "pichost.io/config/i18n"
 )
 
 // Regexp definitions

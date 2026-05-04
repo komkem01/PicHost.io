@@ -1,6 +1,6 @@
 package log
 
-import "mcop/internal/config"
+import "pichost.io/internal/config"
 
 type Module struct {
 	Svc *Service

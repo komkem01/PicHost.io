@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"mcop/app/modules"
+	"pichost.io/app/modules"
 
 	"github.com/gin-gonic/gin"
 )

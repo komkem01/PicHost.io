@@ -1,8 +1,8 @@
 package config
 
 import (
-	dbdto "mcop/internal/database/dto"
-	rddto "mcop/internal/redis/dto"
+	dbdto "pichost.io/internal/database/dto"
+	rddto "pichost.io/internal/redis/dto"
 )
 
 type Database struct {

@@ -1,8 +1,8 @@
 package example
 
 import (
-	entitiesinf "mcop/app/modules/entities/inf"
-	"mcop/internal/config"
+	entitiesinf "pichost.io/app/modules/entities/inf"
+	"pichost.io/internal/config"
 
 	"go.opentelemetry.io/otel/trace"
 )

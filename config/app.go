@@ -1,13 +1,13 @@
 package config
 
 import (
-	"mcop/app/modules/example"
-	exampletwo "mcop/app/modules/example-two"
-	"mcop/app/modules/sentry"
-	"mcop/app/modules/specs"
-	"mcop/internal/kafka"
-	"mcop/internal/log"
-	"mcop/internal/otel/collector"
+	"pichost.io/app/modules/example"
+	exampletwo "pichost.io/app/modules/example-two"
+	"pichost.io/app/modules/sentry"
+	"pichost.io/app/modules/specs"
+	"pichost.io/internal/kafka"
+	"pichost.io/internal/log"
+	"pichost.io/internal/otel/collector"
 )
 
 // Config is a struct that contains all the configuration of the application.
@@ -52,9 +52,9 @@ var App = Config{
 
 	HttpJsonNaming: "snake_case",
 
-	SslCaPath:      "mcop/cert/ca.pem",
-	SslPrivatePath: "mcop/cert/server.pem",
-	SslCertPath:    "mcop/cert/server-key.pem",
+	SslCaPath:      "pichost.io/cert/ca.pem",
+	SslPrivatePath: "pichost.io/cert/server.pem",
+	SslCertPath:    "pichost.io/cert/server-key.pem",
 
 	Otel: collector.Config{
 		CollectorEndpoint: "",

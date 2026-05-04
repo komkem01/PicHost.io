@@ -4,19 +4,19 @@ import (
 	"log/slog"
 	"sync"
 
-	"mcop/app/modules/entities"
-	"mcop/app/modules/example"
-	"mcop/app/modules/sentry"
-	"mcop/app/modules/specs"
-	"mcop/internal/config"
-	"mcop/internal/database"
-	"mcop/internal/log"
-	"mcop/internal/otel/collector"
+	"pichost.io/app/modules/entities"
+	"pichost.io/app/modules/example"
+	"pichost.io/app/modules/sentry"
+	"pichost.io/app/modules/specs"
+	"pichost.io/internal/config"
+	"pichost.io/internal/database"
+	"pichost.io/internal/log"
+	"pichost.io/internal/otel/collector"
 
-	exampletwo "mcop/app/modules/example-two"
+	exampletwo "pichost.io/app/modules/example-two"
 
-	appConf "mcop/config"
-	// "mcop/app/modules/kafka"
+	appConf "pichost.io/config"
+	// "pichost.io/app/modules/kafka"
 )
 
 type Modules struct {

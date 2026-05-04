@@ -3,9 +3,9 @@ package redis
 import (
 	"context"
 
-	"mcop/internal/provider"
+	"pichost.io/internal/provider"
 
-	dto "mcop/internal/redis/dto"
+	dto "pichost.io/internal/redis/dto"
 )
 
 type RedisModule struct {

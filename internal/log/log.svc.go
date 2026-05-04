@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"mcop/internal/config"
+	"pichost.io/internal/config"
 
 	"go.elastic.co/ecszap"
 	"go.opentelemetry.io/contrib/bridges/otelzap"

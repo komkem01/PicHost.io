@@ -3,11 +3,11 @@ package cmd
 import (
 	"strings"
 
-	appConf "mcop/config"
-	"mcop/database/migrations"
-	"mcop/internal/config"
-	"mcop/internal/database"
-	"mcop/internal/log"
+	appConf "pichost.io/config"
+	"pichost.io/database/migrations"
+	"pichost.io/internal/config"
+	"pichost.io/internal/database"
+	"pichost.io/internal/log"
 
 	"github.com/spf13/cobra"
 	"github.com/uptrace/bun/migrate"

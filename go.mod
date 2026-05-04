@@ -1,4 +1,4 @@
-module mcop
+module pichost.io
 
 go 1.25.1
 
@@ -6,7 +6,6 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/IBM/sarama v1.46.2
 	github.com/getsentry/sentry-go v0.36.0
-	github.com/getsentry/sentry-go/gin v0.36.0
 	github.com/getsentry/sentry-go/otel v0.36.0
 	github.com/getsentry/sentry-go/slog v0.36.0
 	github.com/gin-contrib/cors v1.7.6

@@ -1,7 +1,7 @@
 package example
 
 import (
-	"mcop/app/modules/net/httpx"
+	"pichost.io/app/modules/net/httpx"
 
 	"go.opentelemetry.io/otel/trace"
 )

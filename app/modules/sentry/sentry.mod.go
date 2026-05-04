@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"mcop/internal/provider"
+	"pichost.io/internal/provider"
 
-	"mcop/internal/config"
+	"pichost.io/internal/config"
 
 	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/otel"
@@ -34,7 +34,7 @@ type Config struct {
 }
 
 func New(conf *config.Config[Config]) *Module {
-	tracer := otel.Tracer("mcop.storage.sentry")
+	tracer := otel.Tracer("pichost.io.storage.sentry")
 	svc := newService(&Options{
 		Config: conf,
 		tracer: tracer,

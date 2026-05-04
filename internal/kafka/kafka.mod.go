@@ -1,7 +1,7 @@
 package kafka
 
 import (
-	"mcop/internal/config"
+	"pichost.io/internal/config"
 )
 
 type Module struct {

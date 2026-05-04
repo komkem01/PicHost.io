@@ -77,7 +77,7 @@ type Controller struct {
 
 // Module constructor
 func New(conf *config.Config[Config], dependencies...) *Module {
-    tracer := otel.Tracer("mcop.service_name.module_name")
+    tracer := otel.Tracer("pichost.io.service_name.module_name")
     svc := newService(&Options{
         Config: conf,
         tracer: tracer,
@@ -99,7 +99,7 @@ func New(conf *config.Config[Config], dependencies...) *Module {
 Modules that need cleanup should implement the `provider.Close` interface:
 
 ```go
-import "mcop/internal/provider"
+import "pichost.io/internal/provider"
 
 var _ provider.Close = (*Service)(nil)
 
@@ -292,7 +292,7 @@ func (s *Service) SomeOperation(ctx context.Context, userID uuid.UUID) error {
 
 ```go
 import "log/slog"
-import "mcop/internal/log"
+import "pichost.io/internal/log"
 
 // Get logger with structured fields (standalone usage)
 logger := log.With(slog.String("module", "mymodule"))
@@ -397,7 +397,7 @@ Key environment variables to configure:
 
 ```bash
 # Application
-APP_NAME=mcop-storage-service
+APP_NAME=pichost.io-storage-service
 APP_KEY=your-app-key
 ENVIRONMENT=local|development|uat|production
 PORT=8080

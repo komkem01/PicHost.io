@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"os"
 
-	"mcop/app/console"
-	"mcop/internal/cmd"
+	"pichost.io/app/console"
+	"pichost.io/internal/cmd"
 
 	"github.com/spf13/cobra"
 )

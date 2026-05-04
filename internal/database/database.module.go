@@ -3,8 +3,8 @@ package database
 import (
 	"context"
 
-	dto "mcop/internal/database/dto"
-	"mcop/internal/provider"
+	dto "pichost.io/internal/database/dto"
+	"pichost.io/internal/provider"
 )
 
 type DatabaseModule struct {

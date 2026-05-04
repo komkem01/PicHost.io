@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	dto "mcop/internal/redis/dto"
+	dto "pichost.io/internal/redis/dto"
 
 	"github.com/jinzhu/copier"
 	"github.com/redis/go-redis/v9"
