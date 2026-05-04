@@ -39,4 +39,9 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 	}))
 
 	api(app.Group("/api/v1"), mod)
+	apiUser(app.Group("/api/v1"), mod)
+	apiStorage(app.Group("/api/v1"), mod)
+	apiImage(app.Group("/api/v1"), mod)
+	apiPublic(app.Group("/api/v1"), mod)
+	apiAuth(app.Group("/api/v1"), mod)
 }

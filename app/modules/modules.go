@@ -4,10 +4,14 @@ import (
 	"log/slog"
 	"sync"
 
+	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/entities"
 	"pichost.io/app/modules/example"
+	"pichost.io/app/modules/image"
 	"pichost.io/app/modules/sentry"
 	"pichost.io/app/modules/specs"
+	"pichost.io/app/modules/storage"
+	"pichost.io/app/modules/users"
 	"pichost.io/internal/config"
 	"pichost.io/internal/database"
 	"pichost.io/internal/log"
@@ -20,13 +24,17 @@ import (
 )
 
 type Modules struct {
-	Conf   *config.Module[appConf.Config]
-	Specs  *specs.Module
-	Log    *log.Module
-	OTEL   *collector.Module
-	Sentry *sentry.Module
-	DB     *database.DatabaseModule
-	ENT    *entities.Module
+	Conf    *config.Module[appConf.Config]
+	Specs   *specs.Module
+	Log     *log.Module
+	OTEL    *collector.Module
+	Sentry  *sentry.Module
+	DB      *database.DatabaseModule
+	ENT     *entities.Module
+	Auth    *auth.Module
+	Users   *users.Module
+	Storage *storage.Module
+	Image   *image.Module
 	// Kafka *kafka.Module
 	Example  *example.Module
 	Example2 *exampletwo.Module
@@ -45,6 +53,10 @@ func modulesInit() {
 
 	db := database.New(conf.Database.Sql)
 	entitiesMod := entities.New(db.Svc.DB())
+	authMod := auth.New(config.Conf[auth.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc)
+	usersMod := users.New(config.Conf[users.Config](confMod.Svc), entitiesMod.Svc)
+	storageMod := storage.New(config.Conf[storage.Config](confMod.Svc), entitiesMod.Svc)
+	imageMod := image.New(config.Conf[image.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc)
 	exampleMod := example.New(config.Conf[example.Config](confMod.Svc), entitiesMod.Svc)
 	exampleMod2 := exampletwo.New(config.Conf[exampletwo.Config](confMod.Svc), entitiesMod.Svc)
 	// kafka := kafka.New(&conf.Kafka)
@@ -56,6 +68,10 @@ func modulesInit() {
 		Sentry:   sentryMod,
 		DB:       db,
 		ENT:      entitiesMod,
+		Auth:     authMod,
+		Users:    usersMod,
+		Storage:  storageMod,
+		Image:    imageMod,
 		Example:  exampleMod,
 		Example2: exampleMod2,
 	}

@@ -2,3 +2,13 @@ success: Success
 internal-error: Internal server error
 invalid-request-form: Invalid request form
 example-message-ok: Example message ok
+user-created: User created
+user-fetched: User fetched
+user-listed: User list fetched
+user-updated: User updated
+user-deleted: User deleted
+user-not-found: User not found
+image-fetched: Image fetched
+image-not-found: Image not found
+image-url-not-found: Image URL not found
+image-presign-url-fetched: Image presigned URL fetched

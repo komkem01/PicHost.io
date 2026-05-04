@@ -4,6 +4,6 @@ vendor/
 dist/
 tmp/
 .idea/
-storage/
+# storage/
 .DS_Store
 todo_tree.example

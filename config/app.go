@@ -1,10 +1,15 @@
 package config
 
 import (
+	"pichost.io/app/modules/auth"
+	"pichost.io/app/modules/image"
+
 	"pichost.io/app/modules/example"
 	exampletwo "pichost.io/app/modules/example-two"
 	"pichost.io/app/modules/sentry"
 	"pichost.io/app/modules/specs"
+	"pichost.io/app/modules/storage"
+	"pichost.io/app/modules/users"
 	"pichost.io/internal/kafka"
 	"pichost.io/internal/log"
 	"pichost.io/internal/otel/collector"
@@ -36,6 +41,11 @@ type Config struct {
 	Example example.Config
 
 	ExampleTwo exampletwo.Config
+
+	Auth    auth.Config
+	User    users.Config
+	Storage storage.Config
+	Image   image.Config
 }
 
 var App = Config{
@@ -63,4 +73,19 @@ var App = Config{
 		MetricMode:        "noop",
 		TraceRatio:        0.01,
 	},
+	Auth: auth.Config{
+		JWTSecret:              "change-me-in-production",
+		AccessTokenTTLSeconds:  900,
+		RefreshTokenTTLSeconds: 2592000,
+		JWTIssuer:              "pichost.io",
+		RefreshCookieName:      "refresh_token",
+		RefreshCookieDomain:    "",
+		RefreshCookieSecure:    true,
+		GoogleClientID:         "",
+		GoogleClientSecret:     "",
+		GoogleRedirectURL:      "",
+		GoogleStateTTLSeconds:  300,
+	},
+	User:  users.Config{},
+	Image: image.Config{},
 }

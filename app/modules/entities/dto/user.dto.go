@@ -4,16 +4,20 @@ type CreateUser struct {
 	Email    *string `json:"email"`
 	Password *string `json:"password"`
 	Username *string `json:"username"`
+	Plan     string  `json:"plan"`
+	IsGuest  bool    `json:"is_guest"`
 }
 
 type UpdateUser struct {
 	Email    *string `json:"email"`
 	Username *string `json:"username"`
 	IsActive *bool   `json:"is_active"`
+	Plan     *string `json:"plan"`
+	IsGuest  *bool   `json:"is_guest"`
 }
 
 type UpdateUserPlan struct {
-	Plan string `json:"plan"`
+	Plan *string `json:"plan"`
 }
 
 type UpdateUserPassword struct {

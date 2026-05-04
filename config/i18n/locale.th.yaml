@@ -2,3 +2,13 @@ success: สำเร็จ
 internal-error: เกิดข้อผิดพลาดจากเซิร์ฟเวอร์
 invalid-request-form: กรอกข้อมูลไม่ถูกต้อง
 example-message-ok: โอเค
+user-created: สร้างผู้ใช้เรียบร้อยแล้ว
+user-fetched: ดึงข้อมูลผู้ใช้เรียบร้อยแล้ว
+user-listed: ดึงรายการผู้ใช้เรียบร้อยแล้ว
+user-updated: อัปเดตผู้ใช้เรียบร้อยแล้ว
+user-deleted: ลบผู้ใช้เรียบร้อยแล้ว
+user-not-found: ไม่พบผู้ใช้
+image-fetched: ดึงข้อมูลรูปภาพเรียบร้อยแล้ว
+image-not-found: ไม่พบรูปภาพ
+image-url-not-found: ไม่พบลิงก์รูปภาพ
+image-presign-url-fetched: ดึงลิงก์ชั่วคราวของรูปภาพเรียบร้อยแล้ว

@@ -78,6 +78,31 @@ The **Dependency Injection Layer** provides infrastructure services that are inj
 
 ## Development Guidelines
 
+### Layer Responsibilities (Project Rule)
+
+Use this rule as the default behavior for all modules:
+
+- `entities` layer:
+    - Communicates with database only (CRUD/query with Bun ORM)
+    - Must not contain business orchestration across multiple modules
+    - Keep heavy processing in Go code before/after DB call when possible to reduce DB load
+
+- `svc` layer:
+    - Contains business logic and flow orchestration
+    - No request parsing/validation responsibility here
+    - Return errors directly to caller for controller-level handling
+
+- `ctl` layer:
+    - First boundary after route handling
+    - Parse and validate input payload/params/header/query
+    - Convert/normalize data before calling service
+    - Shape response body and HTTP status code
+
+Implementation note:
+
+- Route -> Controller -> Service -> Entities -> DB
+- Validation and parsing happen in Controller, not Service/Entities
+
 ### 1. Module Pattern
 
 Every module follows this structure:
@@ -329,6 +354,14 @@ func (s *Service) SomeOperation(ctx context.Context, userID uuid.UUID) error {
 - Implement custom error types for better categorization
 - Add context to errors for better debugging
 - Use appropriate HTTP status codes
+- Add user-facing error messages to i18n files first, then use message keys in code
+- Do not hardcode response error text in controllers/services
+
+Recommended flow:
+
+- Define error keys in `config/i18n/locale.en.yaml` and `config/i18n/locale.th.yaml`
+- Resolve localized text from key in controller before sending response
+- Keep service errors technical; map to user-facing i18n messages at controller boundary
 
 ```go
 // Error handling with OpenTelemetry
@@ -339,6 +372,8 @@ if err != nil {
 
 // HTTP status codes
 400 - Bad Request (validation errors)
+401 - Unauthorized
+412 - Precondition Failed
 404 - Not Found
 500 - Internal Server Error
 201 - Created (for POST)
