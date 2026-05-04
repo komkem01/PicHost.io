@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 
+	"pichost.io/app/modules/entities/ent"
 	"pichost.io/app/utils/base"
 	"pichost.io/config/i18n"
 
@@ -15,7 +16,8 @@ type getFileURI struct {
 }
 
 type getPresignURLQuery struct {
-	URL string `form:"url" binding:"required"`
+	ID  string `form:"id"`
+	URL string `form:"url"`
 }
 
 func (c *Controller) GetFile(ctx *gin.Context) {
@@ -51,7 +53,24 @@ func (c *Controller) GetPresignURL(ctx *gin.Context) {
 		return
 	}
 
-	item, err := c.svc.GetPresignURL(ctx.Request.Context(), req.URL)
+	var item *ent.StorageEntity
+	var err error
+
+	if req.ID != "" {
+		id, parseErr := uuid.Parse(req.ID)
+		if parseErr != nil {
+			base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+			return
+		}
+
+		item, err = c.svc.GetPresignURLByID(ctx.Request.Context(), id)
+	} else if req.URL != "" {
+		item, err = c.svc.GetPresignURL(ctx.Request.Context(), req.URL)
+	} else {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
 	if err != nil {
 		if errors.Is(err, ErrStorageNotFound) {
 			_ = base.JSON(ctx, 404, i18n.BadRequest, nil, nil)
@@ -60,6 +79,14 @@ func (c *Controller) GetPresignURL(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
+	if item == nil || item.URL == nil {
+		_ = base.JSON(ctx, 404, i18n.BadRequest, nil, nil)
+		return
+	}
 
-	base.Success(ctx, gin.H{"url": item.URL})
+	ctx.Header("Cache-Control", "no-store")
+	base.Success(ctx, gin.H{
+		"url":        item.URL,
+		"expires_in": int(c.svc.presignExpiry().Seconds()),
+	})
 }

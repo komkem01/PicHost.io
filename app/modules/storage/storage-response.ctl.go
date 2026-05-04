@@ -21,7 +21,7 @@ func toStorageResponse(item *ent.StorageEntity) StorageResponseController {
 		ID:        item.ID.String(),
 		Provider:  item.Provider,
 		Path:      item.Path,
-		URL:       item.URL,
+		URL:       nil,
 		FileSize:  item.FileSize,
 		MIMEType:  item.MIMEType,
 		CreatedAt: item.CreatedAt.Format(time.RFC3339),

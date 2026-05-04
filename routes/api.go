@@ -44,6 +44,7 @@ func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 
 func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
 	image := r.Group("/images")
+	image.Use(mod.Auth.Ctl.OptionalAuthMiddleware())
 	{
 		image.POST("", mod.Image.Ctl.CreateImage)
 		image.GET("/:id", mod.Image.Ctl.GetImage)
