@@ -55,7 +55,7 @@ func (s *Service) InitUserQuota(ctx context.Context, userID uuid.UUID) error {
 
 // CheckUpload validates whether a file upload is permitted under the user's plan.
 // For guest uploads pass uuid.Nil as userID and the GuestPlan limits will be applied.
-func (s *Service) CheckUpload(ctx context.Context, userID uuid.UUID, isGuest bool, fileSize int64, mimeType string) error {
+func (s *Service) CheckUpload(ctx context.Context, userID uuid.UUID, isGuest bool, fileSize int64, mimeType string, isPrivate bool) error {
 	ctx, span, log := internalotel.NewLogSpan(ctx, s.tracer, "CheckUpload")
 	defer span.End()
 
@@ -99,6 +99,12 @@ func (s *Service) CheckUpload(ctx context.Context, userID uuid.UUID, isGuest boo
 			usedStorage = quota.UsedStorageBytes
 			imageCount = quota.ImageCount
 		}
+	}
+
+	// Check private image permission.
+	if isPrivate && !limits.AllowPrivate {
+		log.Warnf("private images not allowed on plan")
+		return ErrQuotaPrivateNotAllowed
 	}
 
 	// Check MIME type.

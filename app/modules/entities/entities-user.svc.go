@@ -115,6 +115,7 @@ func (s *Service) UpdateUserPassword(ctx context.Context, id uuid.UUID, password
 	}
 	_, err := s.db.NewUpdate().
 		Model(data).
+		Column("password", "updated_at").
 		Where("id = ?", id).
 		Exec(ctx)
 	if err != nil {

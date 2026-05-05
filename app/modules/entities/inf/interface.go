@@ -28,6 +28,7 @@ type UserEntity interface {
 	GetListUser(ctx context.Context) ([]*ent.UserEntity, error)
 	GetUserByEmail(ctx context.Context, email string) (*ent.UserEntity, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, user entitiesdto.UpdateUser) (*ent.UserEntity, error)
+	UpdateUserPassword(ctx context.Context, id uuid.UUID, password entitiesdto.UpdateUserPassword) (*ent.UserEntity, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 }
 
@@ -45,6 +46,7 @@ type StorageEntity interface {
 type ImageEntity interface {
 	CreateImage(ctx context.Context, image entitiesdto.CreateImage) (*ent.ImageEntity, error)
 	GetImageByID(ctx context.Context, id uuid.UUID) (*ent.ImageEntity, error)
+	GetImagesByUserID(ctx context.Context, userID uuid.UUID) ([]*ent.ImageEntity, error)
 	UpdateImage(ctx context.Context, id uuid.UUID, image entitiesdto.UpdateImage) (*ent.ImageEntity, error)
 	DeleteImage(ctx context.Context, id uuid.UUID) error
 	ListExpiredImages(ctx context.Context, before time.Time) ([]*ent.ImageEntity, error)

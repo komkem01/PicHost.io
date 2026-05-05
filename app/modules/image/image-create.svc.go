@@ -52,7 +52,7 @@ func (s *Service) CreateImage(ctx context.Context, req CreateImageSvcRequest) (*
 	}
 
 	// Check quota before creating the record.
-	if err := s.quotaSvc.CheckUpload(ctx, req.UserID, req.IsGuest, storage.FileSize, mimeType); err != nil {
+	if err := s.quotaSvc.CheckUpload(ctx, req.UserID, req.IsGuest, storage.FileSize, mimeType, req.IsPrivate); err != nil {
 		log.Warnf("quota check failed for user %s: %v", req.UserID, err)
 		span.RecordError(err)
 
@@ -65,6 +65,8 @@ func (s *Service) CreateImage(ctx context.Context, req CreateImageSvcRequest) (*
 			return nil, ErrImageLimitReached
 		case errors.Is(err, quotamod.ErrQuotaMIMENotAllowed):
 			return nil, ErrImageMIMENotAllowed
+		case errors.Is(err, quotamod.ErrQuotaPrivateNotAllowed):
+			return nil, ErrImagePrivateNotAllowed
 		default:
 			return nil, err
 		}

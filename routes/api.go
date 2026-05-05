@@ -40,6 +40,12 @@ func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 		storage.GET("/presign-url", mod.Storage.Ctl.GetPresignURL)
 		storage.DELETE("/files/:id", mod.Storage.Ctl.DeleteFile)
 	}
+
+	storageAuth := r.Group("/storage")
+	storageAuth.Use(mod.Auth.Ctl.AuthMiddleware())
+	{
+		storageAuth.POST("/upload-file", mod.Storage.Ctl.UploadFile)
+	}
 }
 
 func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
@@ -49,6 +55,12 @@ func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
 		image.POST("", mod.Image.Ctl.CreateImage)
 		image.GET("/:id", mod.Image.Ctl.GetImage)
 		image.GET("/presign-url", mod.Image.Ctl.GetPresignURL)
+	}
+
+	imageAuth := r.Group("/images")
+	imageAuth.Use(mod.Auth.Ctl.AuthMiddleware())
+	{
+		imageAuth.GET("", mod.Image.Ctl.ListImages)
 	}
 }
 
@@ -70,5 +82,8 @@ func apiAuth(r *gin.RouterGroup, mod *modules.Modules) {
 	auth.Use(mod.Auth.Ctl.AuthMiddleware())
 	{
 		auth.GET("/me", mod.Auth.Ctl.Me)
+		auth.PATCH("/me", mod.Auth.Ctl.UpdateMe)
+		auth.PATCH("/change-password", mod.Auth.Ctl.ChangePassword)
+		auth.GET("/quota", mod.Auth.Ctl.GetQuota)
 	}
 }

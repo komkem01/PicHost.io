@@ -2,6 +2,7 @@ package storage
 
 import (
 	entitiesinf "pichost.io/app/modules/entities/inf"
+	imagemod "pichost.io/app/modules/image"
 	"pichost.io/internal/config"
 
 	"go.opentelemetry.io/otel"
@@ -29,4 +30,11 @@ func New(conf *config.Config[Config], storageEnt entitiesinf.StorageEntity) *Mod
 		Svc:    svc,
 		Ctl:    newController(tracer, svc),
 	}
+}
+
+// SetImageService injects the image.Service into the storage Controller
+// so that UploadFile can create image records in a single request.
+// Must be called after both modules are initialized.
+func (m *Module) SetImageService(imgSvc *imagemod.Service) {
+	m.Ctl.imgSvc = imgSvc
 }

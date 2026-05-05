@@ -26,5 +26,6 @@ var (
 	ImageFileTooLarge      = "image-file-too-large"
 	ImageLimitReached      = "image-limit-reached"
 	ImageMIMENotAllowed    = "image-mime-not-allowed"
+	ImagePrivateNotAllowed = "image-private-not-allowed"
 	ImageExpired           = "image-expired"
 )

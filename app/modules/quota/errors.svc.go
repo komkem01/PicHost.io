@@ -9,4 +9,5 @@ var (
 	ErrQuotaStorageFull       = errors.New("quota: storage quota exceeded")
 	ErrQuotaImageLimitReached = errors.New("quota: image count limit reached")
 	ErrQuotaMIMENotAllowed    = errors.New("quota: file type not allowed on this plan")
+	ErrQuotaPrivateNotAllowed = errors.New("quota: private images not allowed on this plan")
 )

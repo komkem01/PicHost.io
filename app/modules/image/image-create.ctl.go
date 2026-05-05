@@ -63,6 +63,8 @@ func (c *Controller) CreateImage(ctx *gin.Context) {
 			_ = base.JSON(ctx, 422, i18n.ImageLimitReached, nil, nil)
 		case errors.Is(err, ErrImageMIMENotAllowed):
 			_ = base.JSON(ctx, 422, i18n.ImageMIMENotAllowed, nil, nil)
+		case errors.Is(err, ErrImagePrivateNotAllowed):
+			_ = base.JSON(ctx, 403, i18n.ImagePrivateNotAllowed, nil, nil)
 		default:
 			base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		}

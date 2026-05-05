@@ -29,19 +29,32 @@ func (s *Service) Upload(ctx context.Context, req UploadRequestService) (*ent.St
 	}
 	defer src.Reader.Close()
 
+	return s.saveSource(ctx, provider, src, req.FileSize, req.MIMEType)
+}
+
+// UploadFromSource uploads a pre-built uploadSource (e.g. from a multipart file) to S3
+// and persists the storage record.
+func (s *Service) UploadFromSource(ctx context.Context, provider string, src *uploadSource) (*ent.StorageEntity, error) {
+	if strings.TrimSpace(provider) == "" {
+		provider = "Railway"
+	}
+	return s.saveSource(ctx, provider, src, src.Size, nil)
+}
+
+func (s *Service) saveSource(ctx context.Context, provider string, src *uploadSource, hintSize int64, hintMIME *string) (*ent.StorageEntity, error) {
 	objectPath, objectURL, uploadedSize, uploadedMIME, err := s.uploadToS3(ctx, src)
 	if err != nil {
 		return nil, err
 	}
 
 	finalSize := uploadedSize
-	if finalSize <= 0 && req.FileSize > 0 {
-		finalSize = req.FileSize
+	if finalSize <= 0 && hintSize > 0 {
+		finalSize = hintSize
 	}
 
 	finalMIME := uploadedMIME
-	if req.MIMEType != nil && strings.TrimSpace(*req.MIMEType) != "" {
-		finalMIME = strings.TrimSpace(*req.MIMEType)
+	if hintMIME != nil && strings.TrimSpace(*hintMIME) != "" {
+		finalMIME = strings.TrimSpace(*hintMIME)
 	}
 
 	path := objectPath

@@ -4,7 +4,7 @@ import "errors"
 
 var ErrUserNotFound = errors.New("user not found")
 var ErrUserEmailAlreadyExists = errors.New("user email already exists")
-var ErrAuthInvalidCredentials = errors.New("invalid credentials")
+var ErrAuthInvalidCredentials = errors.New("email or password is incorrect")
 var ErrAuthUnauthorized = errors.New("unauthorized")
 var ErrAuthSessionNotFound = errors.New("auth session not found")
 var ErrAuthInvalidRefreshToken = errors.New("invalid refresh token")
