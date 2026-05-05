@@ -84,6 +84,7 @@ func apiAuth(r *gin.RouterGroup, mod *modules.Modules) {
 	{
 		auth.GET("/me", mod.Auth.Ctl.Me)
 		auth.PATCH("/me", mod.Auth.Ctl.UpdateMe)
+		auth.DELETE("/me", mod.Auth.Ctl.DeleteMe)
 		auth.PATCH("/change-password", mod.Auth.Ctl.ChangePassword)
 		auth.GET("/quota", mod.Auth.Ctl.GetQuota)
 	}

@@ -94,3 +94,33 @@ func (c *Controller) ChangePassword(ctx *gin.Context) {
 
 	base.Success(ctx, gin.H{"message": "Password changed successfully"})
 }
+
+// DeleteMe handles DELETE /auth/me — permanently deletes the authenticated user's account.
+func (c *Controller) DeleteMe(ctx *gin.Context) {
+	rawID, exists := ctx.Get("auth_user_id")
+	if !exists {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+	userID, ok := rawID.(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+
+	if err := c.svc.DeleteMe(ctx.Request.Context(), userID); err != nil {
+		c.recordAudit("auth.delete_account", "failure", uuidPtr(userID), strPtr("user"), uuidPtr(userID),
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, strPtr(err.Error()))
+		if errors.Is(err, ErrAuthUnauthorized) {
+			base.Unauthorized(ctx, i18n.Unauthorized, nil)
+			return
+		}
+		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.recordAudit("auth.delete_account", "success", uuidPtr(userID), strPtr("user"), uuidPtr(userID),
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
+
+	base.Success(ctx, gin.H{"message": "Account deleted successfully"})
+}

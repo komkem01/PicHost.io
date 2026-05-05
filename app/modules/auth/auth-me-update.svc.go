@@ -67,3 +67,12 @@ func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, currentP
 	})
 	return err
 }
+
+// DeleteMe permanently deletes the authenticated user's own account.
+func (s *Service) DeleteMe(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.user.GetUserByID(ctx, userID)
+	if err != nil {
+		return ErrAuthUnauthorized
+	}
+	return s.user.DeleteUser(ctx, userID)
+}
