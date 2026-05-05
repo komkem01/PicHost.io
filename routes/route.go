@@ -32,14 +32,16 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 	)
 
 	app.Use(cors.New(cors.Config{
-		AllowAllOrigins:        true,
-		AllowMethods:           []string{"*"},
-		AllowHeaders:           []string{"*"},
+		AllowOriginFunc: func(origin string) bool {
+			// Allow all origins but reflect the actual origin (required when AllowCredentials=true)
+			return true
+		},
+		AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
+		AllowHeaders:           []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
+		ExposeHeaders:          []string{"X-Trace-ID"},
 		AllowCredentials:       true,
-		AllowWildcard:          true,
 		AllowBrowserExtensions: true,
 		AllowWebSockets:        true,
-		AllowFiles:             false,
 	}))
 
 	api(app.Group("/api/v1"), mod)

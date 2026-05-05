@@ -67,3 +67,7 @@ type UserQuotaEntity interface {
 	UpsertUserQuota(ctx context.Context, userID uuid.UUID) (*ent.UserQuotaEntity, error)
 	AddToUserQuota(ctx context.Context, userID uuid.UUID, delta entitiesdto.AddToUserQuota) (*ent.UserQuotaEntity, error)
 }
+
+type AuditEntity interface {
+	CreateAuditLog(ctx context.Context, log entitiesdto.CreateAuditLog) error
+}

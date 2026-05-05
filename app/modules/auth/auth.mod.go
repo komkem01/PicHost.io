@@ -26,6 +26,7 @@ type Config struct {
 	GoogleClientSecret     string
 	GoogleRedirectURL      string
 	GoogleStateTTLSeconds  int
+	FrontendURL            string
 }
 
 func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity, quotaEnt entitiesinf.UserQuotaEntity) *Module {
@@ -48,6 +49,9 @@ func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt en
 	if conf.Val.GoogleStateTTLSeconds <= 0 {
 		conf.Val.GoogleStateTTLSeconds = 300
 	}
+	if conf.Val.FrontendURL == "" {
+		conf.Val.FrontendURL = "http://localhost:3000"
+	}
 
 	svc := newService(&Options{
 		Config:   conf,
@@ -62,4 +66,10 @@ func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt en
 		Svc:    svc,
 		Ctl:    newController(tracer, svc),
 	}
+}
+
+// SetAuditEntity injects the audit logger into the auth controller (fire-and-forget).
+// Must be called after New().
+func (m *Module) SetAuditEntity(auditEnt entitiesinf.AuditEntity) {
+	m.Ctl.auditEnt = auditEnt
 }

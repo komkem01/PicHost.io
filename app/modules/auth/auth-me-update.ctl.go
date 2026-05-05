@@ -44,6 +44,9 @@ func (c *Controller) UpdateMe(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("auth.me_update", "success", uuidPtr(userID), strPtr("user"), uuidPtr(userID),
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
+
 	base.Success(ctx, gin.H{
 		"id":       user.ID.String(),
 		"username": user.Username,
@@ -76,6 +79,8 @@ func (c *Controller) ChangePassword(ctx *gin.Context) {
 	}
 
 	if err := c.svc.ChangePassword(ctx.Request.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+		c.recordAudit("auth.change_password", "failure", uuidPtr(userID), strPtr("user"), uuidPtr(userID),
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, strPtr(err.Error()))
 		if errors.Is(err, ErrAuthInvalidCredentials) {
 			base.BadRequest(ctx, "Current password is incorrect", gin.H{"error": "current_password_incorrect"})
 			return
@@ -83,6 +88,9 @@ func (c *Controller) ChangePassword(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
+
+	c.recordAudit("auth.change_password", "success", uuidPtr(userID), strPtr("user"), uuidPtr(userID),
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
 
 	base.Success(ctx, gin.H{"message": "Password changed successfully"})
 }

@@ -38,3 +38,9 @@ func New(conf *config.Config[Config], storageEnt entitiesinf.StorageEntity) *Mod
 func (m *Module) SetImageService(imgSvc *imagemod.Service) {
 	m.Ctl.imgSvc = imgSvc
 }
+
+// SetAuditEntity injects the audit logger into the storage controller (fire-and-forget).
+// Must be called after New().
+func (m *Module) SetAuditEntity(auditEnt entitiesinf.AuditEntity) {
+	m.Ctl.auditEnt = auditEnt
+}

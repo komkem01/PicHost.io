@@ -2,7 +2,9 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 
 	"pichost.io/app/utils/base"
 	"pichost.io/config/i18n"
@@ -62,6 +64,9 @@ func (c *Controller) Register(ctx *gin.Context) {
 		Username: req.Username,
 	}, ctx.GetHeader("User-Agent"), ctx.ClientIP())
 	if err != nil {
+		c.recordAudit("auth.register", "failure", nil, strPtr("user"), nil,
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"),
+			map[string]any{"email": req.Email}, strPtr(err.Error()))
 		if errors.Is(err, ErrUserEmailAlreadyExists) {
 			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
 			return
@@ -69,6 +74,10 @@ func (c *Controller) Register(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
+
+	c.recordAudit("auth.register", "success", uuidPtr(res.User.ID), strPtr("user"), uuidPtr(res.User.ID),
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"),
+		map[string]any{"email": req.Email, "username": req.Username, "plan": string(res.User.Plan)}, nil)
 
 	c.setRefreshCookie(ctx, res.RefreshToken)
 	base.Success(ctx, AuthResponseController{
@@ -91,6 +100,9 @@ func (c *Controller) Login(ctx *gin.Context) {
 		Password: req.Password,
 	}, ctx.GetHeader("User-Agent"), ctx.ClientIP())
 	if err != nil {
+		c.recordAudit("auth.login", "failure", nil, strPtr("user"), nil,
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"),
+			map[string]any{"email": req.Email}, strPtr(err.Error()))
 		if errors.Is(err, ErrAuthInvalidCredentials) || errors.Is(err, ErrAuthUnauthorized) {
 			base.Unauthorized(ctx, i18n.Unauthorized, gin.H{"error": err.Error()})
 			return
@@ -98,6 +110,10 @@ func (c *Controller) Login(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
+
+	c.recordAudit("auth.login", "success", uuidPtr(res.User.ID), strPtr("user"), uuidPtr(res.User.ID),
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"),
+		map[string]any{"email": req.Email, "plan": string(res.User.Plan)}, nil)
 
 	c.setRefreshCookie(ctx, res.RefreshToken)
 	base.Success(ctx, AuthResponseController{
@@ -117,6 +133,8 @@ func (c *Controller) Refresh(ctx *gin.Context) {
 
 	res, err := c.svc.Refresh(ctx.Request.Context(), refreshToken, ctx.GetHeader("User-Agent"), ctx.ClientIP())
 	if err != nil {
+		c.recordAudit("auth.token_refresh", "failure", nil, strPtr("session"), nil,
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, strPtr(err.Error()))
 		if errors.Is(err, ErrAuthSessionNotFound) || errors.Is(err, ErrAuthInvalidRefreshToken) || errors.Is(err, ErrAuthUnauthorized) {
 			base.Unauthorized(ctx, i18n.Unauthorized, gin.H{"error": err.Error()})
 			return
@@ -124,6 +142,9 @@ func (c *Controller) Refresh(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
+
+	c.recordAudit("auth.token_refresh", "success", uuidPtr(res.User.ID), strPtr("session"), nil,
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
 
 	c.setRefreshCookie(ctx, res.RefreshToken)
 	base.Success(ctx, AuthResponseController{
@@ -140,6 +161,9 @@ func (c *Controller) Logout(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
+
+	c.recordAudit("auth.logout", "success", nil, strPtr("session"), nil,
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
 
 	c.clearRefreshCookie(ctx)
 	_ = base.RawJSON(ctx, http.StatusNoContent, gin.H{})
@@ -212,6 +236,8 @@ func (c *Controller) GoogleCallback(ctx *gin.Context) {
 		ctx.ClientIP(),
 	)
 	if err != nil {
+		c.recordAudit("auth.google_login", "failure", nil, strPtr("user"), nil,
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, strPtr(err.Error()))
 		if errors.Is(err, ErrGoogleOAuthNotConfigured) ||
 			errors.Is(err, ErrGoogleOAuthInvalidState) ||
 			errors.Is(err, ErrGoogleOAuthInvalidCode) {
@@ -226,6 +252,10 @@ func (c *Controller) GoogleCallback(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("auth.google_login", "success", uuidPtr(res.User.ID), strPtr("user"), uuidPtr(res.User.ID),
+		ctx.ClientIP(), ctx.GetHeader("User-Agent"),
+		map[string]any{"plan": string(res.User.Plan)}, nil)
+
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie(
 		GoogleStateCookieName,
@@ -238,12 +268,15 @@ func (c *Controller) GoogleCallback(ctx *gin.Context) {
 	)
 
 	c.setRefreshCookie(ctx, res.RefreshToken)
-	base.Success(ctx, AuthResponseController{
-		AccessToken: res.AccessToken,
-		TokenType:   "Bearer",
-		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest),
-	})
+
+	// Redirect to frontend callback page; token is in the URL fragment
+	// so it never reaches server logs or referrer headers.
+	callbackURL := fmt.Sprintf(
+		"%s/auth/callback#access_token=%s",
+		c.svc.conf.Val.FrontendURL,
+		url.QueryEscape(res.AccessToken),
+	)
+	ctx.Redirect(http.StatusFound, callbackURL)
 }
 
 func (c *Controller) setRefreshCookie(ctx *gin.Context, refreshToken string) {

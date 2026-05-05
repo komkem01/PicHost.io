@@ -35,6 +35,7 @@ func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 	storage := r.Group("/storage")
 	{
 		storage.POST("/upload", mod.Storage.Ctl.Upload)
+		storage.POST("/upload-file-guest", mod.Storage.Ctl.UploadFileGuest)
 		storage.GET("/files", mod.Storage.Ctl.ListFiles)
 		storage.GET("/files/:id", mod.Storage.Ctl.GetFile)
 		storage.GET("/presign-url", mod.Storage.Ctl.GetPresignURL)
