@@ -26,6 +26,7 @@ type UserEntity struct {
 	Plan      PlanType  `bun:"plan,type:plan_type,notnull,default:'Free'"`
 	IsActive  bool      `bun:"is_active,notnull"`
 	IsGuest   bool      `bun:"is_guest,notnull"`
+	IsAdmin   bool      `bun:"is_admin,notnull,default:false"`
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp"`
 	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp"`
 }

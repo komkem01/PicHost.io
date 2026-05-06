@@ -29,6 +29,14 @@ func (s *Service) GetQuota(ctx context.Context, userID uuid.UUID) (*QuotaResult,
 	}
 
 	limits := ent.GetPlanLimits(user.Plan)
+	if setting, pErr := s.planEnt.GetPlanSettingByKey(ctx, string(user.Plan)); pErr == nil {
+		limits.StorageBytes = setting.StorageLimitBytes
+		limits.FileSizeBytes = int64(setting.MaxUploadMB) * 1024 * 1024
+		limits.MaxImages = setting.ImageLimit
+		limits.AllowPrivate = setting.AllowPrivate
+	} else if !errors.Is(pErr, sql.ErrNoRows) {
+		return nil, pErr
+	}
 
 	var usedStorage int64
 	var imageCount int

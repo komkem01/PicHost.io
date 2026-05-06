@@ -29,10 +29,10 @@ type Config struct {
 	FrontendURL            string
 }
 
-func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity, quotaEnt entitiesinf.UserQuotaEntity) *Module {
+func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity, quotaEnt entitiesinf.UserQuotaEntity, planEnt entitiesinf.PlanSettingEntity) *Module {
 	tracer := otel.Tracer("pichost.io.modules.auth")
 	if conf.Val.AccessTokenTTLSeconds <= 0 {
-		conf.Val.AccessTokenTTLSeconds = 900
+		conf.Val.AccessTokenTTLSeconds = 300
 	}
 	if conf.Val.RefreshTokenTTLSeconds <= 0 {
 		conf.Val.RefreshTokenTTLSeconds = 2592000
@@ -59,6 +59,7 @@ func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt en
 		user:     userEnt,
 		auth:     authEnt,
 		quotaEnt: quotaEnt,
+		planEnt:  planEnt,
 	})
 
 	return &Module{

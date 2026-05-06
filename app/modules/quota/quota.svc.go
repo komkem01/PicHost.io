@@ -23,6 +23,7 @@ type Options struct {
 	userEnt  entitiesinf.UserEntity
 	quotaEnt entitiesinf.UserQuotaEntity
 	imageEnt entitiesinf.ImageEntity
+	planEnt  entitiesinf.PlanSettingEntity
 }
 
 type Service struct {
@@ -83,6 +84,16 @@ func (s *Service) CheckUpload(ctx context.Context, userID uuid.UUID, isGuest boo
 			return err
 		}
 		limits = ent.GetPlanLimits(user.Plan)
+		if setting, pErr := s.planEnt.GetPlanSettingByKey(ctx, string(user.Plan)); pErr == nil {
+			limits.StorageBytes = setting.StorageLimitBytes
+			limits.FileSizeBytes = int64(setting.MaxUploadMB) * 1024 * 1024
+			limits.MaxImages = setting.ImageLimit
+			limits.AllowPrivate = setting.AllowPrivate
+		} else if !errors.Is(pErr, sql.ErrNoRows) {
+			span.RecordError(pErr)
+			span.SetStatus(codes.Error, pErr.Error())
+			return pErr
+		}
 
 		quota, err := s.quotaEnt.GetUserQuota(ctx, userID)
 		if err != nil {

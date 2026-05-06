@@ -68,6 +68,8 @@ func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
 func apiPublic(r *gin.RouterGroup, mod *modules.Modules) {
 	public := r.Group("/public")
 	{
+		public.GET("/plans", mod.Admin.Ctl.ListPublicPlanSettings)
+
 		auth := public.Group("/auth")
 		auth.POST("/login", mod.Auth.Ctl.Login)
 		auth.POST("/register", mod.Auth.Ctl.Register)
@@ -87,5 +89,32 @@ func apiAuth(r *gin.RouterGroup, mod *modules.Modules) {
 		auth.DELETE("/me", mod.Auth.Ctl.DeleteMe)
 		auth.PATCH("/change-password", mod.Auth.Ctl.ChangePassword)
 		auth.GET("/quota", mod.Auth.Ctl.GetQuota)
+	}
+}
+
+func apiAdmin(r *gin.RouterGroup, mod *modules.Modules) {
+	adminGrp := r.Group("/admin")
+	adminGrp.Use(mod.Auth.Ctl.AdminMiddleware())
+	{
+		adminGrp.GET("/stats", mod.Admin.Ctl.Stats)
+
+		plans := adminGrp.Group("/plans")
+		{
+			plans.GET("", mod.Admin.Ctl.ListPlanSettings)
+			plans.GET("/:key", mod.Admin.Ctl.GetPlanSetting)
+			plans.PATCH("/:key", mod.Admin.Ctl.UpsertPlanSetting)
+			plans.DELETE("/:key", mod.Admin.Ctl.DeletePlanSetting)
+		}
+
+		users := adminGrp.Group("/users")
+		{
+			users.GET("", mod.Admin.Ctl.ListUsers)
+			users.GET("/:id", mod.Admin.Ctl.GetUser)
+			users.PATCH("/:id/profile", mod.Admin.Ctl.UpdateProfile)
+			users.PATCH("/:id/plan", mod.Admin.Ctl.SetUserPlan)
+			users.PATCH("/:id/active", mod.Admin.Ctl.SetUserActive)
+			users.PATCH("/:id/admin", mod.Admin.Ctl.SetUserAdmin)
+			users.DELETE("/:id", mod.Admin.Ctl.DeleteUser)
+		}
 	}
 }

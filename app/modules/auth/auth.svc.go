@@ -28,6 +28,7 @@ type Service struct {
 	user     entitiesinf.UserEntity
 	auth     entitiesinf.AuthEntity
 	quotaEnt entitiesinf.UserQuotaEntity
+	planEnt  entitiesinf.PlanSettingEntity
 	conf     *config.Config[Config]
 }
 
@@ -37,6 +38,7 @@ type Options struct {
 	user     entitiesinf.UserEntity
 	auth     entitiesinf.AuthEntity
 	quotaEnt entitiesinf.UserQuotaEntity
+	planEnt  entitiesinf.PlanSettingEntity
 }
 
 func newService(opt *Options) *Service {
@@ -45,6 +47,7 @@ func newService(opt *Options) *Service {
 		user:     opt.user,
 		auth:     opt.auth,
 		quotaEnt: opt.quotaEnt,
+		planEnt:  opt.planEnt,
 		conf:     opt.Config,
 	}
 }

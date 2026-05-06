@@ -28,7 +28,11 @@ type UserEntity interface {
 	GetListUser(ctx context.Context) ([]*ent.UserEntity, error)
 	GetUserByEmail(ctx context.Context, email string) (*ent.UserEntity, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, user entitiesdto.UpdateUser) (*ent.UserEntity, error)
+	UpdateUserPlan(ctx context.Context, id uuid.UUID, plan entitiesdto.UpdateUserPlan) (*ent.UserEntity, error)
+	UpdateUserProfile(ctx context.Context, id uuid.UUID, profile entitiesdto.UpdateUserProfile) (*ent.UserEntity, error)
+	SetUserActive(ctx context.Context, id uuid.UUID, isActive bool) error
 	UpdateUserPassword(ctx context.Context, id uuid.UUID, password entitiesdto.UpdateUserPassword) (*ent.UserEntity, error)
+	SetUserAdmin(ctx context.Context, id uuid.UUID, isAdmin bool) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 }
 
@@ -66,6 +70,13 @@ type UserQuotaEntity interface {
 	GetUserQuota(ctx context.Context, userID uuid.UUID) (*ent.UserQuotaEntity, error)
 	UpsertUserQuota(ctx context.Context, userID uuid.UUID) (*ent.UserQuotaEntity, error)
 	AddToUserQuota(ctx context.Context, userID uuid.UUID, delta entitiesdto.AddToUserQuota) (*ent.UserQuotaEntity, error)
+}
+
+type PlanSettingEntity interface {
+	ListPlanSettings(ctx context.Context) ([]*ent.PlanSettingEntity, error)
+	GetPlanSettingByKey(ctx context.Context, key string) (*ent.PlanSettingEntity, error)
+	UpsertPlanSetting(ctx context.Context, setting entitiesdto.UpsertPlanSetting) (*ent.PlanSettingEntity, error)
+	DeletePlanSettingByKey(ctx context.Context, key string) error
 }
 
 type AuditEntity interface {

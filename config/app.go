@@ -1,6 +1,7 @@
 package config
 
 import (
+	"pichost.io/app/modules/admin"
 	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/image"
 	"pichost.io/app/modules/quota"
@@ -48,6 +49,7 @@ type Config struct {
 	Storage storage.Config
 	Image   image.Config
 	Quota   quota.Config
+	Admin   admin.Config
 }
 
 var App = Config{
@@ -77,7 +79,7 @@ var App = Config{
 	},
 	Auth: auth.Config{
 		JWTSecret:              "change-me-in-production",
-		AccessTokenTTLSeconds:  900,
+		AccessTokenTTLSeconds:  300,
 		RefreshTokenTTLSeconds: 2592000,
 		JWTIssuer:              "pichost.io",
 		RefreshCookieName:      "refresh_token",

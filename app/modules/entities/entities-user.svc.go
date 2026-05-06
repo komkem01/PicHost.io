@@ -93,18 +93,15 @@ func (s *Service) UpdateUser(ctx context.Context, id uuid.UUID, user entitiesdto
 
 func (s *Service) UpdateUserPlan(ctx context.Context, id uuid.UUID, plan entitiesdto.UpdateUserPlan) (*ent.UserEntity, error) {
 	now := time.Now()
-	data := &ent.UserEntity{
-		Plan:      ent.PlanType(*plan.Plan),
-		UpdatedAt: now,
-	}
 	_, err := s.db.NewUpdate().
-		Model(data).
+		TableExpr("users").
+		Set("plan = ?, updated_at = ?", ent.PlanType(*plan.Plan), now).
 		Where("id = ?", id).
 		Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	return s.GetUserByID(ctx, id)
 }
 
 func (s *Service) UpdateUserPassword(ctx context.Context, id uuid.UUID, password entitiesdto.UpdateUserPassword) (*ent.UserEntity, error) {
@@ -127,6 +124,39 @@ func (s *Service) UpdateUserPassword(ctx context.Context, id uuid.UUID, password
 func (s *Service) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	_, err := s.db.NewDelete().
 		Model((*ent.UserEntity)(nil)).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+func (s *Service) SetUserActive(ctx context.Context, id uuid.UUID, isActive bool) error {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("is_active = ?, updated_at = ?", isActive, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+func (s *Service) UpdateUserProfile(ctx context.Context, id uuid.UUID, profile entitiesdto.UpdateUserProfile) (*ent.UserEntity, error) {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("email = ?, username = ?, updated_at = ?", profile.Email, profile.Username, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUserByID(ctx, id)
+}
+
+func (s *Service) SetUserAdmin(ctx context.Context, id uuid.UUID, isAdmin bool) error {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("is_admin = ?, updated_at = ?", isAdmin, now).
 		Where("id = ?", id).
 		Exec(ctx)
 	return err

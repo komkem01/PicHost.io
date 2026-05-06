@@ -20,6 +20,11 @@ type UpdateUserPlan struct {
 	Plan *string `json:"plan"`
 }
 
+type UpdateUserProfile struct {
+	Email    *string `json:"email"`
+	Username *string `json:"username"`
+}
+
 type UpdateUserPassword struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`

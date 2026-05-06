@@ -31,6 +31,7 @@ type UserResponseController struct {
 	Plan     string  `json:"plan"`
 	IsActive bool    `json:"is_active"`
 	IsGuest  bool    `json:"is_guest"`
+	IsAdmin  bool    `json:"is_admin"`
 }
 
 type AuthResponseController struct {
@@ -40,7 +41,7 @@ type AuthResponseController struct {
 	User        UserResponseController `json:"user"`
 }
 
-func toUserResponseController(userID uuid.UUID, email *string, username *string, plan string, isActive bool, isGuest bool) UserResponseController {
+func toUserResponseController(userID uuid.UUID, email *string, username *string, plan string, isActive bool, isGuest bool, isAdmin bool) UserResponseController {
 	return UserResponseController{
 		ID:       userID.String(),
 		Email:    email,
@@ -48,6 +49,7 @@ func toUserResponseController(userID uuid.UUID, email *string, username *string,
 		Plan:     plan,
 		IsActive: isActive,
 		IsGuest:  isGuest,
+		IsAdmin:  isAdmin,
 	}
 }
 
@@ -84,7 +86,7 @@ func (c *Controller) Register(ctx *gin.Context) {
 		AccessToken: res.AccessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest),
+		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest, res.User.IsAdmin),
 	})
 }
 
@@ -120,7 +122,7 @@ func (c *Controller) Login(ctx *gin.Context) {
 		AccessToken: res.AccessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest),
+		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest, res.User.IsAdmin),
 	})
 }
 
@@ -151,7 +153,7 @@ func (c *Controller) Refresh(ctx *gin.Context) {
 		AccessToken: res.AccessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest),
+		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest, res.User.IsAdmin),
 	})
 }
 
@@ -192,7 +194,7 @@ func (c *Controller) Me(ctx *gin.Context) {
 		return
 	}
 
-	base.Success(ctx, toUserResponseController(user.ID, user.Email, user.Username, string(user.Plan), user.IsActive, user.IsGuest), i18n.UserFetched)
+	base.Success(ctx, toUserResponseController(user.ID, user.Email, user.Username, string(user.Plan), user.IsActive, user.IsGuest, user.IsAdmin), i18n.UserFetched)
 }
 
 func (c *Controller) GoogleLogin(ctx *gin.Context) {
