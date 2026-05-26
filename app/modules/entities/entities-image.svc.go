@@ -76,6 +76,20 @@ func (s *Service) GetImageByID(ctx context.Context, id uuid.UUID) (*ent.ImageEnt
 	return &image, nil
 }
 
+func (s *Service) GetImageByStorageID(ctx context.Context, storageID uuid.UUID) (*ent.ImageEntity, error) {
+	var image ent.ImageEntity
+	err := s.db.NewSelect().
+		Model(&image).
+		Where("storage_id = ?", storageID).
+		OrderExpr("created_at DESC").
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &image, nil
+}
+
 func (s *Service) GetImagesByUserID(ctx context.Context, userID uuid.UUID) ([]*ent.ImageEntity, error) {
 	var images []*ent.ImageEntity
 	err := s.db.NewSelect().

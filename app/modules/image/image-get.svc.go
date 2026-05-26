@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"pichost.io/app/modules/entities/ent"
+	quotamod "pichost.io/app/modules/quota"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -33,7 +34,27 @@ func (s *Service) GetImage(ctx context.Context, id uuid.UUID) (*ent.ImageEntity,
 		return nil, ErrImageExpired
 	}
 
+	if item.UserID != nil && *item.UserID != uuid.Nil {
+		if lockErr := s.quotaSvc.EnsureUsageAllowed(ctx, *item.UserID, false); lockErr != nil {
+			if errors.Is(lockErr, quotamod.ErrQuotaAccountLocked) {
+				return nil, ErrImageAccountLocked
+			}
+			return nil, lockErr
+		}
+	}
+
 	return item, nil
+}
+
+func (s *Service) GetImageByStorageID(ctx context.Context, storageID uuid.UUID) (*ent.ImageEntity, error) {
+	item, err := s.image.GetImageByStorageID(ctx, storageID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrImageNotFound
+		}
+		return nil, err
+	}
+	return s.GetImage(ctx, item.ID)
 }
 
 func (s *Service) GetPresignURL(ctx context.Context, imageID uuid.UUID) (string, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	"pichost.io/app/modules/entities/ent"
@@ -32,6 +33,66 @@ type Service struct {
 
 func newService(opt *Options) *Service {
 	return &Service{Options: opt}
+}
+
+func (s *Service) getUserPlanSnapshot(ctx context.Context, userID uuid.UUID) (*ent.UserEntity, ent.PlanLimits, int64, int, error) {
+	user, err := s.userEnt.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, ent.PlanLimits{}, 0, 0, err
+	}
+
+	// Enforce expiry handling here too, not only at /auth/me.
+	if user.Plan != ent.PlanTypeFree && user.PlanExpiresAt != nil && time.Now().After(*user.PlanExpiresAt) {
+		user, err = s.userEnt.DowngradeUserPlanToFree(ctx, userID)
+		if err != nil {
+			return nil, ent.PlanLimits{}, 0, 0, err
+		}
+	}
+
+	limits := ent.GetPlanLimits(user.Plan)
+	if setting, pErr := s.planEnt.GetPlanSettingByKey(ctx, string(user.Plan)); pErr == nil {
+		limits.StorageBytes = setting.StorageLimitBytes
+		limits.FileSizeBytes = int64(setting.MaxUploadMB) * 1024 * 1024
+		limits.MaxImages = setting.ImageLimit
+		limits.AllowPrivate = setting.AllowPrivate
+	} else if !errors.Is(pErr, sql.ErrNoRows) {
+		return nil, ent.PlanLimits{}, 0, 0, pErr
+	}
+
+	var usedStorage int64
+	var imageCount int
+	quota, qErr := s.quotaEnt.GetUserQuota(ctx, userID)
+	if qErr != nil {
+		if !errors.Is(qErr, sql.ErrNoRows) {
+			return nil, ent.PlanLimits{}, 0, 0, qErr
+		}
+	} else {
+		usedStorage = quota.UsedStorageBytes
+		imageCount = quota.ImageCount
+	}
+
+	return user, limits, usedStorage, imageCount, nil
+}
+
+// EnsureUsageAllowed blocks account usage when current usage already exceeds current plan limits.
+func (s *Service) EnsureUsageAllowed(ctx context.Context, userID uuid.UUID, isGuest bool) error {
+	if isGuest || userID == uuid.Nil {
+		return nil
+	}
+
+	_, limits, usedStorage, imageCount, err := s.getUserPlanSnapshot(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if limits.StorageBytes > 0 && usedStorage > limits.StorageBytes {
+		return ErrQuotaAccountLocked
+	}
+	if limits.MaxImages > 0 && imageCount > limits.MaxImages {
+		return ErrQuotaAccountLocked
+	}
+
+	return nil
 }
 
 // InitUserQuota creates the quota row for a newly registered user.
@@ -70,6 +131,7 @@ func (s *Service) CheckUpload(ctx context.Context, userID uuid.UUID, isGuest boo
 	var limits ent.PlanLimits
 	var usedStorage int64
 	var imageCount int
+	var err error
 
 	if isGuest {
 		limits = ent.GuestPlan
@@ -77,38 +139,20 @@ func (s *Service) CheckUpload(ctx context.Context, userID uuid.UUID, isGuest boo
 		usedStorage = 0
 		imageCount = 0
 	} else {
-		user, err := s.userEnt.GetUserByID(ctx, userID)
+		if err := s.EnsureUsageAllowed(ctx, userID, false); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			if errors.Is(err, ErrQuotaAccountLocked) {
+				return ErrQuotaAccountLocked
+			}
+			return err
+		}
+
+		_, limits, usedStorage, imageCount, err = s.getUserPlanSnapshot(ctx, userID)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 			return err
-		}
-		limits = ent.GetPlanLimits(user.Plan)
-		if setting, pErr := s.planEnt.GetPlanSettingByKey(ctx, string(user.Plan)); pErr == nil {
-			limits.StorageBytes = setting.StorageLimitBytes
-			limits.FileSizeBytes = int64(setting.MaxUploadMB) * 1024 * 1024
-			limits.MaxImages = setting.ImageLimit
-			limits.AllowPrivate = setting.AllowPrivate
-		} else if !errors.Is(pErr, sql.ErrNoRows) {
-			span.RecordError(pErr)
-			span.SetStatus(codes.Error, pErr.Error())
-			return pErr
-		}
-
-		quota, err := s.quotaEnt.GetUserQuota(ctx, userID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				// Quota row missing — treat as zeroes (will be created on consume).
-				usedStorage = 0
-				imageCount = 0
-			} else {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return err
-			}
-		} else {
-			usedStorage = quota.UsedStorageBytes
-			imageCount = quota.ImageCount
 		}
 	}
 

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
+	"pichost.io/app/modules/entities/ent"
 	"pichost.io/app/utils/base"
 	"pichost.io/config/i18n"
 
@@ -25,13 +27,15 @@ type LoginRequestController struct {
 }
 
 type UserResponseController struct {
-	ID       string  `json:"id"`
-	Email    *string `json:"email"`
-	Username *string `json:"username"`
-	Plan     string  `json:"plan"`
-	IsActive bool    `json:"is_active"`
-	IsGuest  bool    `json:"is_guest"`
-	IsAdmin  bool    `json:"is_admin"`
+	ID              string  `json:"id"`
+	Email           *string `json:"email"`
+	Username        *string `json:"username"`
+	Plan            string  `json:"plan"`
+	PlanExpiresAt   *string `json:"plan_expires_at"`
+	PlanCancelledAt *string `json:"plan_cancelled_at"`
+	IsActive        bool    `json:"is_active"`
+	IsGuest         bool    `json:"is_guest"`
+	IsAdmin         bool    `json:"is_admin"`
 }
 
 type AuthResponseController struct {
@@ -41,16 +45,25 @@ type AuthResponseController struct {
 	User        UserResponseController `json:"user"`
 }
 
-func toUserResponseController(userID uuid.UUID, email *string, username *string, plan string, isActive bool, isGuest bool, isAdmin bool) UserResponseController {
-	return UserResponseController{
-		ID:       userID.String(),
-		Email:    email,
-		Username: username,
-		Plan:     plan,
-		IsActive: isActive,
-		IsGuest:  isGuest,
-		IsAdmin:  isAdmin,
+func toUserResponseController(u *ent.UserEntity) UserResponseController {
+	r := UserResponseController{
+		ID:       u.ID.String(),
+		Email:    u.Email,
+		Username: u.Username,
+		Plan:     string(u.Plan),
+		IsActive: u.IsActive,
+		IsGuest:  u.IsGuest,
+		IsAdmin:  u.IsAdmin,
 	}
+	if u.PlanExpiresAt != nil {
+		s := u.PlanExpiresAt.UTC().Format(time.RFC3339)
+		r.PlanExpiresAt = &s
+	}
+	if u.PlanCancelledAt != nil {
+		s := u.PlanCancelledAt.UTC().Format(time.RFC3339)
+		r.PlanCancelledAt = &s
+	}
+	return r
 }
 
 func (c *Controller) Register(ctx *gin.Context) {
@@ -86,7 +99,7 @@ func (c *Controller) Register(ctx *gin.Context) {
 		AccessToken: res.AccessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest, res.User.IsAdmin),
+		User:        toUserResponseController(res.User),
 	})
 }
 
@@ -122,7 +135,7 @@ func (c *Controller) Login(ctx *gin.Context) {
 		AccessToken: res.AccessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest, res.User.IsAdmin),
+		User:        toUserResponseController(res.User),
 	})
 }
 
@@ -153,7 +166,7 @@ func (c *Controller) Refresh(ctx *gin.Context) {
 		AccessToken: res.AccessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   res.AccessExpiry,
-		User:        toUserResponseController(res.User.ID, res.User.Email, res.User.Username, string(res.User.Plan), res.User.IsActive, res.User.IsGuest, res.User.IsAdmin),
+		User:        toUserResponseController(res.User),
 	})
 }
 
@@ -194,7 +207,7 @@ func (c *Controller) Me(ctx *gin.Context) {
 		return
 	}
 
-	base.Success(ctx, toUserResponseController(user.ID, user.Email, user.Username, string(user.Plan), user.IsActive, user.IsGuest, user.IsAdmin), i18n.UserFetched)
+	base.Success(ctx, toUserResponseController(user), i18n.UserFetched)
 }
 
 func (c *Controller) GoogleLogin(ctx *gin.Context) {

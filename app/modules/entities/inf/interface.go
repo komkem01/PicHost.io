@@ -29,6 +29,9 @@ type UserEntity interface {
 	GetUserByEmail(ctx context.Context, email string) (*ent.UserEntity, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, user entitiesdto.UpdateUser) (*ent.UserEntity, error)
 	UpdateUserPlan(ctx context.Context, id uuid.UUID, plan entitiesdto.UpdateUserPlan) (*ent.UserEntity, error)
+	SetUserPlanExpiry(ctx context.Context, id uuid.UUID, expiresAt *time.Time, clearCancellation bool) (*ent.UserEntity, error)
+	CancelUserPlan(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error)
+	DowngradeUserPlanToFree(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error)
 	UpdateUserProfile(ctx context.Context, id uuid.UUID, profile entitiesdto.UpdateUserProfile) (*ent.UserEntity, error)
 	SetUserActive(ctx context.Context, id uuid.UUID, isActive bool) error
 	UpdateUserPassword(ctx context.Context, id uuid.UUID, password entitiesdto.UpdateUserPassword) (*ent.UserEntity, error)
@@ -50,6 +53,7 @@ type StorageEntity interface {
 type ImageEntity interface {
 	CreateImage(ctx context.Context, image entitiesdto.CreateImage) (*ent.ImageEntity, error)
 	GetImageByID(ctx context.Context, id uuid.UUID) (*ent.ImageEntity, error)
+	GetImageByStorageID(ctx context.Context, storageID uuid.UUID) (*ent.ImageEntity, error)
 	GetImagesByUserID(ctx context.Context, userID uuid.UUID) ([]*ent.ImageEntity, error)
 	UpdateImage(ctx context.Context, id uuid.UUID, image entitiesdto.UpdateImage) (*ent.ImageEntity, error)
 	DeleteImage(ctx context.Context, id uuid.UUID) error
@@ -77,6 +81,16 @@ type PlanSettingEntity interface {
 	GetPlanSettingByKey(ctx context.Context, key string) (*ent.PlanSettingEntity, error)
 	UpsertPlanSetting(ctx context.Context, setting entitiesdto.UpsertPlanSetting) (*ent.PlanSettingEntity, error)
 	DeletePlanSettingByKey(ctx context.Context, key string) error
+}
+
+type PaymentTransactionEntity interface {
+	CreatePaymentTransaction(ctx context.Context, in entitiesdto.CreatePaymentTransaction) (*ent.PaymentTransactionEntity, error)
+	GetPaymentTransactionByID(ctx context.Context, id uuid.UUID) (*ent.PaymentTransactionEntity, error)
+	GetPaymentTransactionByCheckoutReference(ctx context.Context, checkoutReference string) (*ent.PaymentTransactionEntity, error)
+	ListPaymentTransactionsByUserID(ctx context.Context, userID uuid.UUID, limit int) ([]*ent.PaymentTransactionEntity, error)
+	UpdatePaymentTransactionStatus(ctx context.Context, id uuid.UUID, in entitiesdto.UpdatePaymentTransactionStatus) (*ent.PaymentTransactionEntity, error)
+	UpdatePaymentSlipStorageID(ctx context.Context, id uuid.UUID, in entitiesdto.UpdatePaymentSlipStorageID) (*ent.PaymentTransactionEntity, error)
+	ListPaymentTransactions(ctx context.Context, limit int, offset int) ([]*ent.PaymentTransactionEntity, int, error)
 }
 
 type AuditEntity interface {

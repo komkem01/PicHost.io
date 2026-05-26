@@ -242,6 +242,15 @@ func (s *Service) Me(ctx context.Context, userID uuid.UUID) (*ent.UserEntity, er
 		}
 		return nil, err
 	}
+
+	// Lazy plan expiry: if the paid plan has expired, downgrade to Free automatically.
+	if user.Plan != ent.PlanTypeFree && user.PlanExpiresAt != nil && time.Now().After(*user.PlanExpiresAt) {
+		user, err = s.user.DowngradeUserPlanToFree(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return user, nil
 }
 

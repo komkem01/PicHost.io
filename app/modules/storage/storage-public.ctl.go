@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"pichost.io/app/modules/entities/ent"
+	imagemod "pichost.io/app/modules/image"
 	"pichost.io/app/utils/base"
 	"pichost.io/config/i18n"
 
@@ -32,6 +33,23 @@ func (c *Controller) OpenPublic(ctx *gin.Context) {
 	if err != nil {
 		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
 		return
+	}
+
+	if c.imgSvc != nil {
+		img, imgErr := c.imgSvc.GetImage(ctx.Request.Context(), id)
+		if imgErr != nil {
+			if errors.Is(imgErr, imagemod.ErrImageAccountLocked) {
+				_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
+				return
+			}
+			if errors.Is(imgErr, imagemod.ErrImageNotFound) || errors.Is(imgErr, imagemod.ErrImageExpired) {
+				_ = base.JSON(ctx, 404, i18n.BadRequest, nil, nil)
+				return
+			}
+			base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": imgErr.Error()})
+			return
+		}
+		id = img.StorageID
 	}
 
 	item, err := c.svc.GetPresignURLByID(ctx.Request.Context(), id)
@@ -69,6 +87,20 @@ func (c *Controller) OpenPublicByCode(ctx *gin.Context) {
 		}
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if c.imgSvc != nil {
+		if _, imgErr := c.imgSvc.GetImageByStorageID(ctx.Request.Context(), item.ID); imgErr != nil {
+			if errors.Is(imgErr, imagemod.ErrImageAccountLocked) {
+				_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
+				return
+			}
+			// If this storage is not mapped to an image record, keep existing behavior.
+			if !errors.Is(imgErr, imagemod.ErrImageNotFound) {
+				base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": imgErr.Error()})
+				return
+			}
+		}
 	}
 
 	c.redirectToPresigned(ctx, item)

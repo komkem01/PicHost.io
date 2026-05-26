@@ -9,6 +9,7 @@ import (
 	"pichost.io/app/modules/entities"
 	"pichost.io/app/modules/example"
 	"pichost.io/app/modules/image"
+	"pichost.io/app/modules/payment"
 	"pichost.io/app/modules/quota"
 	"pichost.io/app/modules/sentry"
 	"pichost.io/app/modules/specs"
@@ -39,6 +40,7 @@ type Modules struct {
 	Storage *storage.Module
 	Image   *image.Module
 	Quota   *quota.Module
+	Payment *payment.Module
 	// Kafka *kafka.Module
 	Example  *example.Module
 	Example2 *exampletwo.Module
@@ -62,6 +64,7 @@ func modulesInit() {
 	storageMod := storage.New(config.Conf[storage.Config](confMod.Svc), entitiesMod.Svc)
 	quotaMod := quota.New(config.Conf[quota.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	imageMod := image.New(config.Conf[image.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, quotaMod.Svc)
+	paymentMod := payment.New(config.Conf[payment.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	storageMod.SetImageService(imageMod.Svc)
 	authMod.SetAuditEntity(entitiesMod.Svc)
 	storageMod.SetAuditEntity(entitiesMod.Svc)
@@ -83,6 +86,7 @@ func modulesInit() {
 		Storage:  storageMod,
 		Image:    imageMod,
 		Quota:    quotaMod,
+		Payment:  paymentMod,
 		Example:  exampleMod,
 		Example2: exampleMod2,
 	}

@@ -4,6 +4,7 @@ import (
 	"pichost.io/app/modules/admin"
 	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/image"
+	"pichost.io/app/modules/payment"
 	"pichost.io/app/modules/quota"
 
 	"pichost.io/app/modules/example"
@@ -50,6 +51,7 @@ type Config struct {
 	Image   image.Config
 	Quota   quota.Config
 	Admin   admin.Config
+	Payment payment.Config
 }
 
 var App = Config{
@@ -94,4 +96,7 @@ var App = Config{
 	User:  users.Config{},
 	Image: image.Config{},
 	Quota: quota.Config{},
+	Payment: payment.Config{
+		CheckoutTTLMinutes: 15,
+	},
 }

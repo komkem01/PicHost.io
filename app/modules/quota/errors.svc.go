@@ -10,4 +10,5 @@ var (
 	ErrQuotaImageLimitReached = errors.New("quota: image count limit reached")
 	ErrQuotaMIMENotAllowed    = errors.New("quota: file type not allowed on this plan")
 	ErrQuotaPrivateNotAllowed = errors.New("quota: private images not allowed on this plan")
+	ErrQuotaAccountLocked     = errors.New("quota: account locked because usage exceeds current plan limits")
 )

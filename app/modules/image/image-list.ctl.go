@@ -1,6 +1,7 @@
 package image
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -42,6 +43,10 @@ func (c *Controller) ListImages(ctx *gin.Context) {
 
 	items, err := c.svc.ListImages(ctx.Request.Context(), userID)
 	if err != nil {
+		if errors.Is(err, ErrImageAccountLocked) {
+			_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
+			return
+		}
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}

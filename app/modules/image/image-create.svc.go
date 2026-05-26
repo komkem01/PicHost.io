@@ -57,6 +57,8 @@ func (s *Service) CreateImage(ctx context.Context, req CreateImageSvcRequest) (*
 		span.RecordError(err)
 
 		switch {
+		case errors.Is(err, quotamod.ErrQuotaAccountLocked):
+			return nil, ErrImageAccountLocked
 		case errors.Is(err, quotamod.ErrQuotaFileTooLarge):
 			return nil, ErrImageFileTooLarge
 		case errors.Is(err, quotamod.ErrQuotaStorageFull):

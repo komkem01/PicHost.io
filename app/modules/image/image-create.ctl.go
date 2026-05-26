@@ -53,6 +53,8 @@ func (c *Controller) CreateImage(ctx *gin.Context) {
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrImageAccountLocked):
+			_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
 		case errors.Is(err, ErrImageStorageNotFound):
 			_ = base.JSON(ctx, 404, i18n.ImageNotFound, nil, nil)
 		case errors.Is(err, ErrImageFileTooLarge):

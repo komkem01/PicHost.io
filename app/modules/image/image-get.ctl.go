@@ -33,6 +33,10 @@ func (c *Controller) GetImage(ctx *gin.Context) {
 
 	item, err := c.svc.GetImage(ctx.Request.Context(), id)
 	if err != nil {
+		if errors.Is(err, ErrImageAccountLocked) {
+			_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
+			return
+		}
 		if errors.Is(err, ErrImageNotFound) || errors.Is(err, ErrImageExpired) {
 			_ = base.JSON(ctx, 404, i18n.ImageNotFound, nil, nil)
 			return
@@ -59,6 +63,10 @@ func (c *Controller) GetPresignURL(ctx *gin.Context) {
 
 	url, err := c.svc.GetPresignURL(ctx.Request.Context(), imageID)
 	if err != nil {
+		if errors.Is(err, ErrImageAccountLocked) {
+			_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
+			return
+		}
 		if errors.Is(err, ErrImageNotFound) {
 			_ = base.JSON(ctx, 404, i18n.ImageNotFound, nil, nil)
 			return

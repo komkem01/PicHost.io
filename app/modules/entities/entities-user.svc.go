@@ -104,6 +104,52 @@ func (s *Service) UpdateUserPlan(ctx context.Context, id uuid.UUID, plan entitie
 	return s.GetUserByID(ctx, id)
 }
 
+// SetUserPlanExpiry sets or clears the plan_expires_at column.
+// Pass nil to clear the expiry (e.g. when the user is on the Free plan).
+// Set clearCancellation = true when renewing to also clear plan_cancelled_at.
+func (s *Service) SetUserPlanExpiry(ctx context.Context, id uuid.UUID, expiresAt *time.Time, clearCancellation bool) (*ent.UserEntity, error) {
+	now := time.Now()
+	q := s.db.NewUpdate().TableExpr("users")
+	if clearCancellation {
+		q = q.Set("plan_expires_at = ?, plan_cancelled_at = NULL, updated_at = ?", expiresAt, now)
+	} else {
+		q = q.Set("plan_expires_at = ?, updated_at = ?", expiresAt, now)
+	}
+	_, err := q.Where("id = ?", id).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUserByID(ctx, id)
+}
+
+// CancelUserPlan records the cancellation timestamp. The plan remains active until plan_expires_at.
+func (s *Service) CancelUserPlan(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error) {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("plan_cancelled_at = ?, updated_at = ?", now, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUserByID(ctx, id)
+}
+
+// DowngradeUserPlanToFree sets the plan to Free and clears both plan_expires_at and plan_cancelled_at.
+func (s *Service) DowngradeUserPlanToFree(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error) {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("plan = ?, plan_expires_at = NULL, plan_cancelled_at = NULL, updated_at = ?", ent.PlanTypeFree, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUserByID(ctx, id)
+}
+
 func (s *Service) UpdateUserPassword(ctx context.Context, id uuid.UUID, password entitiesdto.UpdateUserPassword) (*ent.UserEntity, error) {
 	now := time.Now()
 	data := &ent.UserEntity{

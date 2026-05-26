@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"pichost.io/app/modules/entities/ent"
+	quotamod "pichost.io/app/modules/quota"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +17,13 @@ type ImageWithStorage struct {
 }
 
 func (s *Service) ListImages(ctx context.Context, userID uuid.UUID) ([]ImageWithStorage, error) {
+	if err := s.quotaSvc.EnsureUsageAllowed(ctx, userID, false); err != nil {
+		if errors.Is(err, quotamod.ErrQuotaAccountLocked) {
+			return nil, ErrImageAccountLocked
+		}
+		return nil, err
+	}
+
 	images, err := s.image.GetImagesByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

@@ -69,6 +69,7 @@ func apiPublic(r *gin.RouterGroup, mod *modules.Modules) {
 	public := r.Group("/public")
 	{
 		public.GET("/plans", mod.Admin.Ctl.ListPublicPlanSettings)
+		public.POST("/payments/webhook", mod.Payment.Ctl.ConfirmPaymentWebhook)
 
 		auth := public.Group("/auth")
 		auth.POST("/login", mod.Auth.Ctl.Login)
@@ -77,6 +78,19 @@ func apiPublic(r *gin.RouterGroup, mod *modules.Modules) {
 		auth.POST("/logout", mod.Auth.Ctl.Logout)
 		auth.GET("/google", mod.Auth.Ctl.GoogleLogin)
 		auth.GET("/google/callback", mod.Auth.Ctl.GoogleCallback)
+	}
+}
+
+func apiBilling(r *gin.RouterGroup, mod *modules.Modules) {
+	billing := r.Group("/billing")
+	billing.Use(mod.Auth.Ctl.AuthMiddleware())
+	{
+		billing.POST("/checkout", mod.Payment.Ctl.CreateCheckout)
+		billing.GET("/payments", mod.Payment.Ctl.ListMyPayments)
+		billing.GET("/payments/:id", mod.Payment.Ctl.GetMyPayment)
+		billing.POST("/payments/:id/slip", mod.Payment.Ctl.SubmitSlip)
+		billing.GET("/payment-methods", mod.Payment.Ctl.GetPaymentMethods)
+		billing.POST("/cancel", mod.Payment.Ctl.CancelSubscription)
 	}
 }
 
@@ -115,6 +129,12 @@ func apiAdmin(r *gin.RouterGroup, mod *modules.Modules) {
 			users.PATCH("/:id/active", mod.Admin.Ctl.SetUserActive)
 			users.PATCH("/:id/admin", mod.Admin.Ctl.SetUserAdmin)
 			users.DELETE("/:id", mod.Admin.Ctl.DeleteUser)
+		}
+
+		payments := adminGrp.Group("/payments")
+		{
+			payments.GET("", mod.Payment.Ctl.AdminListPayments)
+			payments.PATCH("/:id/confirm", mod.Payment.Ctl.AdminConfirmPayment)
 		}
 	}
 }
