@@ -32,10 +32,10 @@ type Config struct {
 func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity, quotaEnt entitiesinf.UserQuotaEntity, planEnt entitiesinf.PlanSettingEntity) *Module {
 	tracer := otel.Tracer("pichost.io.modules.auth")
 	if conf.Val.AccessTokenTTLSeconds <= 0 {
-		conf.Val.AccessTokenTTLSeconds = 300
+		conf.Val.AccessTokenTTLSeconds = 315360000 // 10 years
 	}
 	if conf.Val.RefreshTokenTTLSeconds <= 0 {
-		conf.Val.RefreshTokenTTLSeconds = 2592000
+		conf.Val.RefreshTokenTTLSeconds = 315360000 // 10 years
 	}
 	if conf.Val.JWTIssuer == "" {
 		conf.Val.JWTIssuer = "pichost.io"

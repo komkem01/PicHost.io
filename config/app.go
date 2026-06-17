@@ -81,8 +81,8 @@ var App = Config{
 	},
 	Auth: auth.Config{
 		JWTSecret:              "change-me-in-production",
-		AccessTokenTTLSeconds:  300,
-		RefreshTokenTTLSeconds: 2592000,
+		AccessTokenTTLSeconds:  315360000, // 10 years
+		RefreshTokenTTLSeconds: 315360000, // 10 years
 		JWTIssuer:              "pichost.io",
 		RefreshCookieName:      "refresh_token",
 		RefreshCookieDomain:    "",
