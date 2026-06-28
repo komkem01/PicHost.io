@@ -167,3 +167,34 @@ func (s *Service) ListExpiredImages(ctx context.Context, before time.Time) ([]*e
 	}
 	return images, nil
 }
+
+// GetGuestStats counts all guest images (where user_id IS NULL) and sums their storage file size.
+func (s *Service) GetGuestStats(ctx context.Context) (int, int64, error) {
+	var stats struct {
+		Count int   `bun:"count"`
+		Size  int64 `bun:"size"`
+	}
+	err := s.db.NewSelect().
+		TableExpr("images AS i").
+		Join("JOIN storages AS s ON s.id = i.storage_id").
+		ColumnExpr("count(i.id) AS count, coalesce(sum(s.file_size), 0) AS size").
+		Where("i.user_id IS NULL").
+		Scan(ctx, &stats)
+	if err != nil {
+		return 0, 0, err
+	}
+	return stats.Count, stats.Size, nil
+}
+
+// GetUniqueGuestIPCount counts the number of unique IP addresses of successful guest uploads since the given time.
+func (s *Service) GetUniqueGuestIPCount(ctx context.Context, since time.Time) (int, error) {
+	var count int
+	err := s.db.NewSelect().
+		Model((*ent.AuditLogEntity)(nil)).
+		ColumnExpr("count(distinct ip_address)").
+		Where("action = ? AND status = ? AND created_at >= ?", "storage.upload_guest", "success", since).
+		Scan(ctx, &count)
+	return count, err
+}
+
+

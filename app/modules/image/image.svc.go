@@ -1,6 +1,9 @@
 package image
 
 import (
+	"context"
+
+	"github.com/google/uuid"
 	entitiesinf "pichost.io/app/modules/entities/inf"
 	"pichost.io/app/modules/quota"
 	"pichost.io/internal/config"
@@ -31,3 +34,9 @@ func newService(opt *Options) *Service {
 		quotaSvc: opt.quotaSvc,
 	}
 }
+
+// IsFreeUser delegates to quotaSvc to check if a user is on the Free plan.
+func (s *Service) IsFreeUser(ctx context.Context, userID uuid.UUID) (bool, error) {
+	return s.quotaSvc.IsFreePlan(ctx, userID)
+}
+

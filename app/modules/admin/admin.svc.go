@@ -129,10 +129,12 @@ func (s *Service) DeletePlanSetting(ctx context.Context, planKey string) error {
 // --- Stats ---
 
 type DashboardStats struct {
-	TotalUsers    int            `json:"total_users"`
-	ActiveUsers   int            `json:"active_users"`
-	GuestUsers    int            `json:"guest_users"`
-	PlanBreakdown map[string]int `json:"plan_breakdown"`
+	TotalUsers        int            `json:"total_users"`
+	ActiveUsers       int            `json:"active_users"`
+	GuestUsers        int            `json:"guest_users"`
+	PlanBreakdown     map[string]int `json:"plan_breakdown"`
+	GuestImages       int            `json:"guest_images"`
+	GuestStorageBytes int64          `json:"guest_storage_bytes"`
 }
 
 func (s *Service) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
@@ -151,6 +153,20 @@ func (s *Service) GetDashboardStats(ctx context.Context) (*DashboardStats, error
 		}
 		stats.PlanBreakdown[string(u.Plan)]++
 	}
+
+	guestCount, guestSize, err := s.image.GetGuestStats(ctx)
+	if err == nil {
+		stats.GuestImages = guestCount
+		stats.GuestStorageBytes = guestSize
+	}
+
+	// Fetch active guest uploader counts in the last 24h as "Guest Users"
+	activeGuestIPs, err := s.image.GetUniqueGuestIPCount(ctx, time.Now().Add(-24*time.Hour))
+	if err == nil && activeGuestIPs > 0 {
+		stats.GuestUsers = activeGuestIPs
+		stats.TotalUsers += activeGuestIPs
+	}
+
 	return stats, nil
 }
 

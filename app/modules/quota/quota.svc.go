@@ -255,3 +255,16 @@ func mimeAllowed(mime string, allowed []string) bool {
 	}
 	return false
 }
+
+// IsFreePlan checks if a user is on the Free plan. If userID is uuid.Nil, it is considered a guest/free.
+func (s *Service) IsFreePlan(ctx context.Context, userID uuid.UUID) (bool, error) {
+	if userID == uuid.Nil {
+		return true, nil
+	}
+	user, _, _, _, err := s.getUserPlanSnapshot(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return user.Plan == ent.PlanTypeFree, nil
+}
+

@@ -58,6 +58,8 @@ type ImageEntity interface {
 	UpdateImage(ctx context.Context, id uuid.UUID, image entitiesdto.UpdateImage) (*ent.ImageEntity, error)
 	DeleteImage(ctx context.Context, id uuid.UUID) error
 	ListExpiredImages(ctx context.Context, before time.Time) ([]*ent.ImageEntity, error)
+	GetGuestStats(ctx context.Context) (int, int64, error)
+	GetUniqueGuestIPCount(ctx context.Context, since time.Time) (int, error)
 }
 
 type AuthEntity interface {

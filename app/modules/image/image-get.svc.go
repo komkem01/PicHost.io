@@ -36,6 +36,9 @@ func (s *Service) GetImage(ctx context.Context, id uuid.UUID) (*ent.ImageEntity,
 
 	if item.UserID != nil && *item.UserID != uuid.Nil {
 		if lockErr := s.quotaSvc.EnsureUsageAllowed(ctx, *item.UserID, false); lockErr != nil {
+			if errors.Is(lockErr, sql.ErrNoRows) {
+				return nil, ErrImageNotFound
+			}
 			if errors.Is(lockErr, quotamod.ErrQuotaAccountLocked) {
 				return nil, ErrImageAccountLocked
 			}

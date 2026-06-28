@@ -1,10 +1,14 @@
 package payment
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -124,7 +128,7 @@ func (s *Service) GetMyPayment(ctx context.Context, userID uuid.UUID, paymentID 
 	if row.UserID != userID {
 		return nil, ErrPaymentForbidden
 	}
-	if row.Status == ent.PaymentStatusPending && time.Now().After(row.ExpiresAt) {
+	if row.Status == ent.PaymentStatusPending && (row.SlipStorageID == nil || strings.TrimSpace(*row.SlipStorageID) == "") && time.Now().After(row.ExpiresAt) {
 		row, err = s.paymentEnt.UpdatePaymentTransactionStatus(ctx, row.ID, entitiesdto.UpdatePaymentTransactionStatus{
 			Status: ent.PaymentStatusExpired,
 		})
@@ -173,7 +177,7 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		return nil, false, err
 	}
 
-	if row.Status == ent.PaymentStatusPending && time.Now().After(row.ExpiresAt) {
+	if row.Status == ent.PaymentStatusPending && (row.SlipStorageID == nil || strings.TrimSpace(*row.SlipStorageID) == "") && time.Now().After(row.ExpiresAt) {
 		row, err = s.paymentEnt.UpdatePaymentTransactionStatus(ctx, row.ID, entitiesdto.UpdatePaymentTransactionStatus{Status: ent.PaymentStatusExpired})
 		if err != nil {
 			return nil, false, err
@@ -263,6 +267,17 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		return nil, false, err
 	}
 
+	// Send telegram notification on plan purchase & confirmation
+	msg := fmt.Sprintf("🎉 <b>Plan Purchased & Confirmed!</b>\n\n"+
+		"<b>User ID :</b> %s\n"+
+		"<b>Transaction ID 	:</b> %s\n"+
+		"<b>Amount :</b> %d THB\n"+
+		"<b>Plan Key :</b> %s\n"+
+		"<b>Status :</b> PAID\n\n"+
+		"<i>The user's plan has been upgraded successfully!</i>",
+		updated.UserID.String(), updated.ID.String(), updated.AmountTHB, updated.PlanKey)
+	sendTelegramNotification(msg)
+
 	return updated, true, nil
 }
 
@@ -297,6 +312,17 @@ func (s *Service) SubmitSlip(ctx context.Context, in SubmitSlipInput) (*ent.Paym
 	if err != nil {
 		return nil, err
 	}
+
+	// Send telegram notification on slip submission
+	msg := fmt.Sprintf("🔔 <b>New Payment Slip Submitted!</b>\n\n"+
+		"<b>User ID :</b> %s\n"+
+		"<b>Transaction ID :</b> %s\n"+
+		"<b>Amount :</b> %d THB\n"+
+		"<b>Plan Key :</b> %s\n\n"+
+		"<i>Please review the bank slip in the Admin Dashboard.</i>",
+		in.UserID.String(), row.ID.String(), row.AmountTHB, row.PlanKey)
+	sendTelegramNotification(msg)
+
 	return updated, nil
 }
 
@@ -357,4 +383,35 @@ func (s *Service) CancelSubscription(ctx context.Context, in CancelSubscriptionI
 	}
 
 	return s.userEnt.CancelUserPlan(ctx, in.UserID)
+}
+
+func sendTelegramNotification(msg string) {
+	token := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
+	chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID"))
+	if token == "" || chatID == "" {
+		fmt.Println("[telegram] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set, skipping notification")
+		return
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+	payload := map[string]string{
+		"chat_id":    chatID,
+		"text":       msg,
+		"parse_mode": "HTML",
+	}
+	body, _ := json.Marshal(payload)
+
+	go func() {
+		fmt.Printf("[telegram] sending to chat_id=%s via bot ...%s\n", chatID, token[len(token)-6:])
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			fmt.Printf("[telegram] request failed: %v\n", err)
+			return
+		}
+		defer resp.Body.Close()
+		respBody := make([]byte, 512)
+		n, _ := resp.Body.Read(respBody)
+		fmt.Printf("[telegram] response status=%d body=%s\n", resp.StatusCode, string(respBody[:n]))
+	}()
 }
