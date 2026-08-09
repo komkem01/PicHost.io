@@ -49,12 +49,12 @@ func buildAllowOriginFunc(allowedOriginsRaw, environment string) (func(string) b
 	}
 
 	return func(origin string) bool {
-		if allowAll {
-			return true
-		}
 		cleanOrigin := strings.ToLower(strings.TrimRight(strings.TrimSpace(origin), "/"))
 		if cleanOrigin == "" {
 			return false
+		}
+		if allowAll {
+			return true
 		}
 		if allowedOrigins[cleanOrigin] {
 			return true
