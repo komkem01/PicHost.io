@@ -5,10 +5,12 @@ import (
 	"sync"
 
 	"pichost.io/app/modules/admin"
+	"pichost.io/app/modules/audit"
 	"pichost.io/app/modules/auth"
+
 	"pichost.io/app/modules/entities"
-	"pichost.io/app/modules/example"
 	"pichost.io/app/modules/image"
+	"pichost.io/app/modules/mailer"
 	"pichost.io/app/modules/payment"
 	"pichost.io/app/modules/quota"
 	"pichost.io/app/modules/sentry"
@@ -19,8 +21,6 @@ import (
 	"pichost.io/internal/database"
 	"pichost.io/internal/log"
 	"pichost.io/internal/otel/collector"
-
-	exampletwo "pichost.io/app/modules/example-two"
 
 	appConf "pichost.io/config"
 	// "pichost.io/app/modules/kafka"
@@ -34,6 +34,7 @@ type Modules struct {
 	Sentry  *sentry.Module
 	DB      *database.DatabaseModule
 	ENT     *entities.Module
+	Mailer  *mailer.Module
 	Auth    *auth.Module
 	Admin   *admin.Module
 	Users   *users.Module
@@ -41,12 +42,12 @@ type Modules struct {
 	Image   *image.Module
 	Quota   *quota.Module
 	Payment *payment.Module
+	Audit   *audit.Module
 	// Kafka *kafka.Module
-	Example  *example.Module
-	Example2 *exampletwo.Module
 }
 
 func modulesInit() {
+
 	confMod := config.New(&appConf.App)
 	specsMod := specs.New(config.Conf[specs.Config](confMod.Svc))
 	conf := confMod.Svc.Config()
@@ -59,37 +60,44 @@ func modulesInit() {
 
 	db := database.New(conf.Database.Sql)
 	entitiesMod := entities.New(db.Svc.DB())
+	mailerMod := mailer.New(config.Conf[mailer.Config](confMod.Svc))
+
 	authMod := auth.New(config.Conf[auth.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
+	authMod.SetMailer(mailerMod.Svc)
+
 	usersMod := users.New(config.Conf[users.Config](confMod.Svc), entitiesMod.Svc)
-	storageMod := storage.New(config.Conf[storage.Config](confMod.Svc), entitiesMod.Svc)
+	storageMod := storage.New(config.Conf[storage.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc)
 	quotaMod := quota.New(config.Conf[quota.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	imageMod := image.New(config.Conf[image.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, quotaMod.Svc)
 	paymentMod := payment.New(config.Conf[payment.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
+	paymentMod.SetMailer(mailerMod.Svc)
+
 	storageMod.SetImageService(imageMod.Svc)
 	authMod.SetAuditEntity(entitiesMod.Svc)
 	storageMod.SetAuditEntity(entitiesMod.Svc)
-	adminMod := admin.New(config.Conf[admin.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
-	exampleMod := example.New(config.Conf[example.Config](confMod.Svc), entitiesMod.Svc)
-	exampleMod2 := exampletwo.New(config.Conf[exampletwo.Config](confMod.Svc), entitiesMod.Svc)
+	adminMod := admin.New(config.Conf[admin.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
+
+	auditMod := audit.New(config.Conf[audit.Config](confMod.Svc), entitiesMod.Svc)
 	// kafka := kafka.New(&conf.Kafka)
 	mod = &Modules{
-		Conf:     confMod,
-		Specs:    specsMod,
-		Log:      logMod,
-		OTEL:     otel,
-		Sentry:   sentryMod,
-		DB:       db,
-		ENT:      entitiesMod,
-		Auth:     authMod,
-		Admin:    adminMod,
-		Users:    usersMod,
-		Storage:  storageMod,
-		Image:    imageMod,
-		Quota:    quotaMod,
-		Payment:  paymentMod,
-		Example:  exampleMod,
-		Example2: exampleMod2,
+		Conf:    confMod,
+		Specs:   specsMod,
+		Log:     logMod,
+		OTEL:    otel,
+		Sentry:  sentryMod,
+		DB:      db,
+		ENT:     entitiesMod,
+		Mailer:  mailerMod,
+		Auth:    authMod,
+		Admin:   adminMod,
+		Users:   usersMod,
+		Storage: storageMod,
+		Image:   imageMod,
+		Quota:   quotaMod,
+		Payment: paymentMod,
+		Audit:   auditMod,
 	}
+
 
 	log.Infof("all modules initialized")
 }

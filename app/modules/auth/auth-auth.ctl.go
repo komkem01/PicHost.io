@@ -33,6 +33,7 @@ type UserResponseController struct {
 	Plan            string  `json:"plan"`
 	PlanExpiresAt   *string `json:"plan_expires_at"`
 	PlanCancelledAt *string `json:"plan_cancelled_at"`
+	EmailVerifiedAt *string `json:"email_verified_at"`
 	IsActive        bool    `json:"is_active"`
 	IsGuest         bool    `json:"is_guest"`
 	IsAdmin         bool    `json:"is_admin"`
@@ -43,6 +44,19 @@ type AuthResponseController struct {
 	TokenType   string                 `json:"token_type"`
 	ExpiresIn   int                    `json:"expires_in"`
 	User        UserResponseController `json:"user"`
+}
+
+type ForgotPasswordRequestController struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordRequestController struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+type VerifyEmailRequestController struct {
+	Token string `json:"token" binding:"required"`
 }
 
 func toUserResponseController(u *ent.UserEntity) UserResponseController {
@@ -62,6 +76,10 @@ func toUserResponseController(u *ent.UserEntity) UserResponseController {
 	if u.PlanCancelledAt != nil {
 		s := u.PlanCancelledAt.UTC().Format(time.RFC3339)
 		r.PlanCancelledAt = &s
+	}
+	if u.EmailVerifiedAt != nil {
+		s := u.EmailVerifiedAt.UTC().Format(time.RFC3339)
+		r.EmailVerifiedAt = &s
 	}
 	return r
 }
@@ -319,3 +337,78 @@ func (c *Controller) clearRefreshCookie(ctx *gin.Context) {
 		true,
 	)
 }
+
+func (c *Controller) ForgotPassword(ctx *gin.Context) {
+	var req ForgotPasswordRequestController
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	_ = c.svc.ForgotPassword(ctx.Request.Context(), req.Email)
+	base.Success(ctx, gin.H{"message": "If that email is registered, a password reset link has been sent."})
+}
+
+func (c *Controller) ResetPassword(ctx *gin.Context) {
+	var req ResetPasswordRequestController
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	if err := c.svc.ResetPassword(ctx.Request.Context(), req.Token, req.NewPassword); err != nil {
+		if errors.Is(err, ErrInvalidOrExpiredToken) {
+			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
+		return
+	}
+
+	base.Success(ctx, gin.H{"message": "Password reset successfully. Please log in with your new password."})
+}
+
+func (c *Controller) VerifyEmail(ctx *gin.Context) {
+	var req VerifyEmailRequestController
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	if err := c.svc.VerifyEmail(ctx.Request.Context(), req.Token); err != nil {
+		if errors.Is(err, ErrInvalidOrExpiredToken) {
+			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
+		return
+	}
+
+	base.Success(ctx, gin.H{"message": "Email verified successfully."})
+}
+
+func (c *Controller) ResendVerification(ctx *gin.Context) {
+	userIDValue, exists := ctx.Get("auth_user_id")
+	if !exists {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+
+	userID, ok := userIDValue.(uuid.UUID)
+	if !ok {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+
+	if err := c.svc.ResendVerificationEmail(ctx.Request.Context(), userID); err != nil {
+		if errors.Is(err, ErrEmailAlreadyVerified) {
+			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
+		return
+	}
+
+	base.Success(ctx, gin.H{"message": "Verification email resent successfully."})
+}
+

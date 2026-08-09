@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"strconv"
@@ -25,7 +26,8 @@ func newController(tracer trace.Tracer, svc *Service) *Controller {
 }
 
 type checkoutRequest struct {
-	PlanKey string `json:"plan_key" binding:"required"`
+	PlanKey  string `json:"plan_key" binding:"required"`
+	Provider string `json:"provider"`
 }
 
 type submitSlipRequest struct {
@@ -55,8 +57,9 @@ func (c *Controller) CreateCheckout(ctx *gin.Context) {
 	}
 
 	result, err := c.svc.CreateCheckout(ctx.Request.Context(), CreateCheckoutInput{
-		UserID:  authUserID,
-		PlanKey: req.PlanKey,
+		UserID:   authUserID,
+		PlanKey:  req.PlanKey,
+		Provider: req.Provider,
 	})
 	if err != nil {
 		if errors.Is(err, ErrPaymentPlanUnavailable) {
@@ -145,15 +148,32 @@ type webhookConfirmRequest struct {
 }
 
 func (c *Controller) ConfirmPaymentWebhook(ctx *gin.Context) {
-	if strings.TrimSpace(c.svc.Val.WebhookSecret) != "" {
-		if !strings.EqualFold(strings.TrimSpace(ctx.GetHeader("X-Payment-Webhook-Token")), strings.TrimSpace(c.svc.Val.WebhookSecret)) {
-			base.Unauthorized(ctx, i18n.Unauthorized, gin.H{"error": ErrPaymentWebhookDenied.Error()})
-			return
+	secret := strings.TrimSpace(c.svc.Val.WebhookSecret)
+	if secret == "" {
+		base.Unauthorized(ctx, i18n.Unauthorized, gin.H{"error": ErrWebhookSecretRequired.Error()})
+		return
+	}
+
+	body, err := ctx.GetRawData()
+	if err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	headers := make(map[string]string)
+	for k, v := range ctx.Request.Header {
+		if len(v) > 0 {
+			headers[k] = v[0]
 		}
 	}
 
+	if err := VerifyHMACorTokenSignature(headers, body, secret); err != nil {
+		base.Unauthorized(ctx, i18n.Unauthorized, gin.H{"error": ErrPaymentWebhookDenied.Error()})
+		return
+	}
+
 	var req webhookConfirmRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
 		return
 	}
@@ -336,6 +356,53 @@ func (c *Controller) AdminConfirmPayment(ctx *gin.Context) {
 		"payment":          updated,
 		"is_plan_upgraded": upgraded,
 	})
+}
+
+type adminRefundRequest struct {
+	Reason *string `json:"reason"`
+}
+
+// AdminRefundPayment handles PATCH /admin/payments/:id/refund
+func (c *Controller) AdminRefundPayment(ctx *gin.Context) {
+	rawUserID, ok := ctx.Get("auth_user_id")
+	if !ok {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+	authUserID, ok := rawUserID.(uuid.UUID)
+	if !ok {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+
+	paymentID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	var req adminRefundRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	updated, err := c.svc.RefundPayment(ctx.Request.Context(), RefundPaymentInput{
+		PaymentID:  paymentID,
+		Reason:     req.Reason,
+		ReviewedBy: &authUserID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrPaymentNotFound), errors.Is(err, ErrPaymentNotPaidForRefund), errors.Is(err, ErrPaymentAlreadyRefunded):
+			base.BadRequest(ctx, err.Error(), nil)
+		default:
+			base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	base.Success(ctx, updated)
 }
 
 // CancelSubscription handles POST /billing/cancel — marks the subscription as cancelled.

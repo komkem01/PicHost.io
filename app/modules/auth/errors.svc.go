@@ -11,3 +11,6 @@ var ErrAuthInvalidRefreshToken = errors.New("invalid refresh token")
 var ErrGoogleOAuthNotConfigured = errors.New("google oauth is not configured")
 var ErrGoogleOAuthInvalidState = errors.New("invalid google oauth state")
 var ErrGoogleOAuthInvalidCode = errors.New("invalid google oauth code")
+var ErrInvalidOrExpiredToken = errors.New("invalid or expired token")
+var ErrEmailAlreadyVerified = errors.New("email is already verified")
+

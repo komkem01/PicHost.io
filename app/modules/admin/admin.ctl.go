@@ -2,7 +2,9 @@ package admin
 
 import (
 	"errors"
+	"strconv"
 	"strings"
+
 
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	entitiesinf "pichost.io/app/modules/entities/inf"
@@ -181,13 +183,26 @@ func (c *Controller) DeletePlanSetting(ctx *gin.Context) {
 
 // GET /admin/users
 func (c *Controller) ListUsers(ctx *gin.Context) {
-	users, err := c.svc.ListUsers(ctx.Request.Context())
+	var filter UserFilter
+	filter.Query = ctx.Query("q")
+	filter.Plan = ctx.Query("plan")
+	if act := ctx.Query("is_active"); act != "" {
+		b := act == "true"
+		filter.IsActive = &b
+	}
+	if adm := ctx.Query("is_admin"); adm != "" {
+		b := adm == "true"
+		filter.IsAdmin = &b
+	}
+
+	users, err := c.svc.ListUsers(ctx.Request.Context(), filter)
 	if err != nil {
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
 	base.Success(ctx, users)
 }
+
 
 // GET /admin/users/:id
 func (c *Controller) GetUser(ctx *gin.Context) {
@@ -312,3 +327,47 @@ func (c *Controller) DeleteUser(ctx *gin.Context) {
 	c.recordAudit("admin.delete_user", "success", getAdminID(ctx), ctx)
 	base.Success(ctx, gin.H{"ok": true})
 }
+
+// GET /admin/images
+func (c *Controller) ListImages(ctx *gin.Context) {
+	limit, _ := strconv.Atoi(ctx.Query("limit"))
+	page, _ := strconv.Atoi(ctx.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	images, total, err := c.svc.ListAllImages(ctx.Request.Context(), limit, offset)
+	if err != nil {
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+
+	base.Success(ctx, gin.H{
+		"items": images,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+// DELETE /admin/images/:id
+func (c *Controller) DeleteImage(ctx *gin.Context) {
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	if err := c.svc.DeleteImageByAdmin(ctx.Request.Context(), id); err != nil {
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+
+	c.recordAudit("admin.delete_image", "success", getAdminID(ctx), ctx)
+	base.Success(ctx, gin.H{"ok": true})
+}
+

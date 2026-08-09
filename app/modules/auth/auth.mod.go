@@ -2,6 +2,7 @@ package auth
 
 import (
 	entitiesinf "pichost.io/app/modules/entities/inf"
+	mailerinf "pichost.io/app/modules/mailer/inf"
 	"pichost.io/internal/config"
 
 	"go.opentelemetry.io/otel"
@@ -74,3 +75,8 @@ func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt en
 func (m *Module) SetAuditEntity(auditEnt entitiesinf.AuditEntity) {
 	m.Ctl.auditEnt = auditEnt
 }
+
+func (m *Module) SetMailer(mailer mailerinf.Mailer) {
+	m.Svc.mailer = mailer
+}
+

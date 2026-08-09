@@ -4,11 +4,10 @@ import (
 	"pichost.io/app/modules/admin"
 	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/image"
+	"pichost.io/app/modules/mailer"
 	"pichost.io/app/modules/payment"
 	"pichost.io/app/modules/quota"
 
-	"pichost.io/app/modules/example"
-	exampletwo "pichost.io/app/modules/example-two"
 	"pichost.io/app/modules/sentry"
 	"pichost.io/app/modules/specs"
 	"pichost.io/app/modules/storage"
@@ -30,6 +29,7 @@ type Config struct {
 
 	Port           int
 	HttpJsonNaming string
+	CorsAllowedOrigins string
 
 	SslCaPath      string
 	SslPrivatePath string
@@ -41,10 +41,6 @@ type Config struct {
 	Kafka kafka.Config
 	Log   log.Option
 
-	Example example.Config
-
-	ExampleTwo exampletwo.Config
-
 	Auth    auth.Config
 	User    users.Config
 	Storage storage.Config
@@ -52,6 +48,7 @@ type Config struct {
 	Quota   quota.Config
 	Admin   admin.Config
 	Payment payment.Config
+	Mailer  mailer.Config
 }
 
 var App = Config{
@@ -66,7 +63,8 @@ var App = Config{
 	AppKey:  "secret",
 	Debug:   false,
 
-	HttpJsonNaming: "snake_case",
+	HttpJsonNaming:     "snake_case",
+	CorsAllowedOrigins: "http://localhost:3000",
 
 	SslCaPath:      "pichost.io/cert/ca.pem",
 	SslPrivatePath: "pichost.io/cert/server.pem",
@@ -98,5 +96,10 @@ var App = Config{
 	Quota: quota.Config{},
 	Payment: payment.Config{
 		CheckoutTTLMinutes: 15,
+	},
+	Mailer: mailer.Config{
+		Provider:    "log",
+		From:        "PicHost.io <noreply@pichost.io>",
+		FrontendURL: "http://localhost:3000",
 	},
 }

@@ -160,12 +160,33 @@ func (s *Service) ListExpiredImages(ctx context.Context, before time.Time) ([]*e
 	var images []*ent.ImageEntity
 	err := s.db.NewSelect().
 		Model(&images).
-		Where("expires_at IS NOT NULL AND expires_at <= ?", before).
+		Where("expires_at IS NOT NULL AND expires_at < ?", before).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return images, nil
+}
+
+func (s *Service) ListAllImages(ctx context.Context, limit int, offset int) ([]*ent.ImageEntity, int, error) {
+	var images []*ent.ImageEntity
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	count, err := s.db.NewSelect().
+		Model(&images).
+		Relation("Storage").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		ScanAndCount(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	return images, count, nil
 }
 
 // GetGuestStats counts all guest images (where user_id IS NULL) and sums their storage file size.

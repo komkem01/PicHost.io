@@ -17,4 +17,8 @@ var (
 	ErrSubscriptionUseUntilRequired = errors.New("payment: use_until_month is required for this account")
 	ErrSubscriptionInvalidUseUntil  = errors.New("payment: invalid use_until_month format, expected YYYY-MM")
 	ErrSubscriptionUseUntilInPast   = errors.New("payment: use_until_month cannot be in the past")
+	ErrEmailVerificationRequired    = errors.New("payment: email verification required before plan upgrade")
+	ErrPaymentNotPaidForRefund      = errors.New("payment: only paid transactions can be refunded")
+	ErrPaymentAlreadyRefunded       = errors.New("payment: transaction is already refunded")
+	ErrWebhookSecretRequired        = errors.New("payment: webhook secret is not configured on server")
 )

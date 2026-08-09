@@ -207,3 +207,97 @@ func (s *Service) SetUserAdmin(ctx context.Context, id uuid.UUID, isAdmin bool) 
 		Exec(ctx)
 	return err
 }
+
+func (s *Service) SetUserEmailVerified(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error) {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("email_verified_at = ?, updated_at = ?", now, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUserByID(ctx, id)
+}
+
+func (s *Service) CreatePasswordResetToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*ent.PasswordResetTokenEntity, error) {
+	data := &ent.PasswordResetTokenEntity{
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+	_, err := s.db.NewInsert().
+		Model(data).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (s *Service) GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (*ent.PasswordResetTokenEntity, error) {
+	var token ent.PasswordResetTokenEntity
+	err := s.db.NewSelect().
+		Model(&token).
+		Where("token_hash = ?", tokenHash).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+func (s *Service) MarkPasswordResetTokenUsed(ctx context.Context, id uuid.UUID) error {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		Model((*ent.PasswordResetTokenEntity)(nil)).
+		Set("used_at = ?", now).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+func (s *Service) CreateEmailVerificationToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*ent.EmailVerificationTokenEntity, error) {
+	// Delete any old tokens for this user first
+	_, _ = s.db.NewDelete().
+		Model((*ent.EmailVerificationTokenEntity)(nil)).
+		Where("user_id = ?", userID).
+		Exec(ctx)
+
+	data := &ent.EmailVerificationTokenEntity{
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+	}
+	_, err := s.db.NewInsert().
+		Model(data).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (s *Service) GetEmailVerificationTokenByHash(ctx context.Context, tokenHash string) (*ent.EmailVerificationTokenEntity, error) {
+	var token ent.EmailVerificationTokenEntity
+	err := s.db.NewSelect().
+		Model(&token).
+		Where("token_hash = ?", tokenHash).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+func (s *Service) DeleteEmailVerificationToken(ctx context.Context, id uuid.UUID) error {
+	_, err := s.db.NewDelete().
+		Model((*ent.EmailVerificationTokenEntity)(nil)).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+

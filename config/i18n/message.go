@@ -10,7 +10,6 @@ var (
 	ValidateFailed      = "validate-failed"
 	InvalidRequestForm  = "invalid-request-form"
 
-	ExampleMessageOK       = "example-message-ok"
 	UserCreated            = "user-created"
 	UserFetched            = "user-fetched"
 	UserListed             = "user-listed"

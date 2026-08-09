@@ -20,5 +20,9 @@ jobs:
           key: ${{ runner.os }}-golang-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-golang-
+      - name: Run Go Vet
+        run: go vet ./...
+      - name: Run Go tests and coverage
+        run: go test -v -coverprofile=coverage.out ./...
       - name: Run Go tests and generate report
         uses: robherley/go-test-action@v0

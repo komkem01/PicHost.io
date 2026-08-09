@@ -141,6 +141,12 @@ func (s *Service) findOrLinkGoogleIdentity(ctx context.Context, userinfo *google
 		// Initialise quota row for the new Google user (best-effort).
 		_, _ = s.quotaEnt.UpsertUserQuota(ctx, created.ID)
 
+		// Auto-verify email for Google OAuth users
+		createdVerified, errVerified := s.user.SetUserEmailVerified(ctx, created.ID)
+		if errVerified == nil && createdVerified != nil {
+			created = createdVerified
+		}
+
 		user = created
 	}
 

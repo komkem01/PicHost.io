@@ -17,12 +17,13 @@ type Module struct {
 
 type Config struct{}
 
-func New(conf *config.Config[Config], storageEnt entitiesinf.StorageEntity) *Module {
+func New(conf *config.Config[Config], storageEnt entitiesinf.StorageEntity, imageEnt entitiesinf.ImageEntity) *Module {
 	tracer := otel.Tracer("pichost.io.modules.storage")
 	svc := newService(&Options{
-		Config: conf,
-		tracer: tracer,
-		store:  storageEnt,
+		Config:   conf,
+		tracer:   tracer,
+		store:    storageEnt,
+		imageEnt: imageEnt,
 	})
 
 	return &Module{

@@ -5,7 +5,5 @@ import (
 )
 
 func Commands() []*cobra.Command {
-	return []*cobra.Command{
-		helloCMD(),
-	}
+	return []*cobra.Command{}
 }

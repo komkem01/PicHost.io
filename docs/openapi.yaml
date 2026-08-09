@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: PicHost.io REST API
+  description: Official OpenAPI 3.0 specification for PicHost.io image hosting platform.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+  - url: https://api.pichost.io/api/v1
+    description: Production Server
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      responses:
+        '200':
+          description: Service is healthy
+
+  /readyz:
+    get:
+      summary: Readiness check
+      responses:
+        '200':
+          description: Service and database are ready
+        '503':
+          description: Service is not ready
+
+  /public/auth/register:
+    post:
+      summary: Register a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, username]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                username:
+                  type: string
+      responses:
+        '200':
+          description: Registration successful, returns tokens and user profile
+        '400':
+          description: Validation error or duplicate email
+
+  /public/auth/login:
+    post:
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /public/auth/refresh:
+    post:
+      summary: Refresh access token using refresh cookie
+      responses:
+        '200':
+          description: Token refreshed
+        '401':
+          description: Invalid or expired refresh token
+
+  /public/plans:
+    get:
+      summary: List public pricing tiers and limits
+      responses:
+        '200':
+          description: List of plan settings
+
+  /auth/me:
+    get:
+      summary: Get current authenticated user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile object
+        '401':
+          description: Unauthorized
+
+  /auth/quota:
+    get:
+      summary: Get current user quota and storage usage
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Quota details
+
+  /storage/upload:
+    post:
+      summary: Upload an image asset (Authenticated user)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Image metadata and URL created
+        '429':
+          description: Rate limit exceeded or account quota locked
+
+  /storage/files/{id}:
+    get:
+      summary: Get file metadata by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: File object
+        '404':
+          description: File not found or private
+
+  /admin/stats:
+    get:
+      summary: Get administrator dashboard stats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard statistics
+        '403':
+          description: Forbidden - Admin role required
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

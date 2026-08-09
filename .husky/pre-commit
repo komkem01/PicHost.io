@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+
+echo "Running pre-commit quality checks..."
+
+# 1. Backend Go Vet & Unit Tests
+echo "==> Running Go vet..."
+go vet ./... || exit 1
+
+echo "==> Running Go tests..."
+go test ./... || exit 1
+
+echo "Pre-commit checks passed successfully!"

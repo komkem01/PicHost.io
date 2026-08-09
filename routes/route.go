@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"strings"
 
 	"pichost.io/app/modules"
 
@@ -12,14 +13,7 @@ import (
 )
 
 func Router(app *gin.Engine, mod *modules.Modules) {
-	app.GET("/healthz", func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, nil)
-	})
-	app.GET("/p/:code", mod.Storage.Ctl.OpenPublicByCode)
-	app.HEAD("/p/:code", mod.Storage.Ctl.OpenPublicByCode)
-	app.GET("/i/:id", mod.Storage.Ctl.OpenPublic)
-	app.HEAD("/i/:id", mod.Storage.Ctl.OpenPublic)
-
+	// 0.4: Global middleware applied FIRST before any routes
 	app.Use(otelgin.Middleware(mod.Conf.Svc.Config().AppName),
 		// Middleware add trace id to response header
 		func(ctx *gin.Context) {
@@ -31,10 +25,19 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 		},
 	)
 
+	// 0.3: Restrict CORS origins using exact match allowlist from config
+	allowedOriginsRaw := mod.Conf.Svc.Config().CorsAllowedOrigins
+	allowedOrigins := make(map[string]bool)
+	for _, o := range strings.Split(allowedOriginsRaw, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			allowedOrigins[o] = true
+		}
+	}
+
 	app.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
-			// Allow all origins but reflect the actual origin (required when AllowCredentials=true)
-			return true
+			return allowedOrigins[origin]
 		},
 		AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
 		AllowHeaders:           []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
@@ -44,8 +47,46 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 		AllowWebSockets:        true,
 	}))
 
-	api(app.Group("/api/v1"), mod)
-	apiUser(app.Group("/api/v1"), mod)
+	// Public static routes
+	app.GET("/healthz", func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+		})
+	})
+	app.GET("/readyz", func(ctx *gin.Context) {
+		checks := gin.H{}
+		isHealthy := true
+
+		if mod.DB != nil && mod.DB.Svc != nil {
+			if err := mod.DB.Svc.DB().PingContext(ctx.Request.Context()); err != nil {
+				checks["database"] = "down"
+				isHealthy = false
+			} else {
+				checks["database"] = "up"
+			}
+		} else {
+			checks["database"] = "unknown"
+		}
+
+		if isHealthy {
+			ctx.JSON(http.StatusOK, gin.H{
+				"status": "ok",
+				"checks": checks,
+			})
+		} else {
+			ctx.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "degraded",
+				"checks": checks,
+			})
+		}
+	})
+
+	app.GET("/p/:code", mod.Storage.Ctl.OpenPublicByCode)
+	app.HEAD("/p/:code", mod.Storage.Ctl.OpenPublicByCode)
+	app.GET("/i/:id", mod.Storage.Ctl.OpenPublic)
+	app.HEAD("/i/:id", mod.Storage.Ctl.OpenPublic)
+
+	// API routes
 	apiStorage(app.Group("/api/v1"), mod)
 	apiImage(app.Group("/api/v1"), mod)
 	apiPublic(app.Group("/api/v1"), mod)
@@ -53,3 +94,4 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 	apiBilling(app.Group("/api/v1"), mod)
 	apiAdmin(app.Group("/api/v1"), mod)
 }
+

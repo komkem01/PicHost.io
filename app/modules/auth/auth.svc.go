@@ -16,6 +16,7 @@ import (
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	"pichost.io/app/modules/entities/ent"
 	entitiesinf "pichost.io/app/modules/entities/inf"
+	mailerinf "pichost.io/app/modules/mailer/inf"
 	"pichost.io/app/utils/hashing"
 	"pichost.io/internal/config"
 
@@ -29,6 +30,7 @@ type Service struct {
 	auth     entitiesinf.AuthEntity
 	quotaEnt entitiesinf.UserQuotaEntity
 	planEnt  entitiesinf.PlanSettingEntity
+	mailer   mailerinf.Mailer
 	conf     *config.Config[Config]
 }
 
@@ -106,6 +108,11 @@ func (s *Service) Register(ctx context.Context, req RegisterRequestService, user
 
 	// Initialise quota row for the new user (best-effort — do not block auth).
 	_, _ = s.quotaEnt.UpsertUserQuota(ctx, created.ID)
+
+	// Send email verification asynchronously
+	go func() {
+		_ = s.SendEmailVerification(context.Background(), created)
+	}()
 
 	return s.issueAuth(ctx, created, userAgent, ip)
 }
@@ -357,3 +364,142 @@ func nullableString(value string) *string {
 	}
 	return &v
 }
+
+func (s *Service) ForgotPassword(ctx context.Context, email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil
+	}
+
+	user, err := s.user.GetUserByEmail(ctx, email)
+	if err != nil || user == nil {
+		// Respond success always to prevent user enumeration
+		return nil
+	}
+
+	rawToken, tokenHash, err := newRefreshToken()
+	if err != nil {
+		return err
+	}
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	_, err = s.user.CreatePasswordResetToken(ctx, user.ID, tokenHash, expiresAt)
+	if err != nil {
+		return err
+	}
+
+	frontendURL := "http://localhost:3000"
+	if s.conf != nil && s.conf.Val.FrontendURL != "" {
+		frontendURL = s.conf.Val.FrontendURL
+	}
+
+	resetURL := fmt.Sprintf("%s/auth/reset-password?token=%s", frontendURL, rawToken)
+	if s.mailer != nil {
+		_ = s.mailer.SendPasswordReset(ctx, email, resetURL, true)
+	}
+
+	return nil
+}
+
+func (s *Service) ResetPassword(ctx context.Context, rawToken string, newPassword string) error {
+	if strings.TrimSpace(rawToken) == "" || len(newPassword) < 8 {
+		return ErrInvalidOrExpiredToken
+	}
+
+	tokenHash := hashRefreshToken(rawToken)
+	token, err := s.user.GetPasswordResetTokenByHash(ctx, tokenHash)
+	if err != nil || token == nil {
+		return ErrInvalidOrExpiredToken
+	}
+
+	if token.UsedAt != nil || time.Now().After(token.ExpiresAt) {
+		return ErrInvalidOrExpiredToken
+	}
+
+	hash, err := hashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.user.UpdateUserPassword(ctx, token.UserID, entitiesdto.UpdateUserPassword{
+		NewPassword: hash,
+	})
+	if err != nil {
+		return err
+	}
+
+	_ = s.user.MarkPasswordResetTokenUsed(ctx, token.ID)
+
+	// Revoke all active sessions for this user
+	_ = s.auth.RevokeAuthSessionsByUserID(ctx, token.UserID)
+
+	return nil
+}
+
+func (s *Service) SendEmailVerification(ctx context.Context, user *ent.UserEntity) error {
+	if user == nil || user.Email == nil || user.EmailVerifiedAt != nil {
+		return nil
+	}
+
+	rawToken, tokenHash, err := newRefreshToken()
+	if err != nil {
+		return err
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour)
+	_, err = s.user.CreateEmailVerificationToken(ctx, user.ID, tokenHash, expiresAt)
+	if err != nil {
+		return err
+	}
+
+	frontendURL := "http://localhost:3000"
+	if s.conf != nil && s.conf.Val.FrontendURL != "" {
+		frontendURL = s.conf.Val.FrontendURL
+	}
+
+	verifyURL := fmt.Sprintf("%s/auth/verify-email?token=%s", frontendURL, rawToken)
+	if s.mailer != nil {
+		_ = s.mailer.SendEmailVerification(ctx, *user.Email, verifyURL, true)
+	}
+
+	return nil
+}
+
+func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
+	if strings.TrimSpace(rawToken) == "" {
+		return ErrInvalidOrExpiredToken
+	}
+
+	tokenHash := hashRefreshToken(rawToken)
+	token, err := s.user.GetEmailVerificationTokenByHash(ctx, tokenHash)
+	if err != nil || token == nil {
+		return ErrInvalidOrExpiredToken
+	}
+
+	if time.Now().After(token.ExpiresAt) {
+		return ErrInvalidOrExpiredToken
+	}
+
+	_, err = s.user.SetUserEmailVerified(ctx, token.UserID)
+	if err != nil {
+		return err
+	}
+
+	_ = s.user.DeleteEmailVerificationToken(ctx, token.ID)
+
+	return nil
+}
+
+func (s *Service) ResendVerificationEmail(ctx context.Context, userID uuid.UUID) error {
+	user, err := s.user.GetUserByID(ctx, userID)
+	if err != nil || user == nil {
+		return ErrUserNotFound
+	}
+
+	if user.EmailVerifiedAt != nil {
+		return ErrEmailAlreadyVerified
+	}
+
+	return s.SendEmailVerification(ctx, user)
+}
+

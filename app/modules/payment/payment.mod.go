@@ -2,6 +2,7 @@ package payment
 
 import (
 	entitiesinf "pichost.io/app/modules/entities/inf"
+	mailerinf "pichost.io/app/modules/mailer/inf"
 	"pichost.io/internal/config"
 
 	"go.opentelemetry.io/otel"
@@ -51,3 +52,8 @@ func New(
 		Ctl:    newController(tracer, svc),
 	}
 }
+
+func (m *Module) SetMailer(mailer mailerinf.Mailer) {
+	m.Svc.mailer = mailer
+}
+

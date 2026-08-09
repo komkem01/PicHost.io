@@ -24,12 +24,16 @@ func New(
 	auditEnt entitiesinf.AuditEntity,
 	imageEnt entitiesinf.ImageEntity,
 	planEnt entitiesinf.PlanSettingEntity,
+	paymentEnt entitiesinf.PaymentTransactionEntity,
+	authEnt entitiesinf.AuthEntity,
+	storageEnt entitiesinf.StorageEntity,
 ) *Module {
 	tracer := otel.Tracer("pichost.io.modules.admin")
-	svc := newService(userEnt, quotaEnt, imageEnt, planEnt)
+	svc := newService(userEnt, quotaEnt, imageEnt, planEnt, paymentEnt, authEnt, storageEnt)
 	return &Module{
 		tracer: tracer,
 		Svc:    svc,
 		Ctl:    newController(tracer, svc, auditEnt),
 	}
 }
+

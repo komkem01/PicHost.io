@@ -23,6 +23,9 @@ type Service struct {
 	quota    entitiesinf.UserQuotaEntity
 	image    entitiesinf.ImageEntity
 	planConf entitiesinf.PlanSettingEntity
+	payment  entitiesinf.PaymentTransactionEntity
+	auth     entitiesinf.AuthEntity
+	storage  entitiesinf.StorageEntity
 }
 
 func newService(
@@ -30,9 +33,21 @@ func newService(
 	quota entitiesinf.UserQuotaEntity,
 	image entitiesinf.ImageEntity,
 	planConf entitiesinf.PlanSettingEntity,
+	payment entitiesinf.PaymentTransactionEntity,
+	auth entitiesinf.AuthEntity,
+	storage entitiesinf.StorageEntity,
 ) *Service {
-	return &Service{user: user, quota: quota, image: image, planConf: planConf}
+	return &Service{
+		user:     user,
+		quota:    quota,
+		image:    image,
+		planConf: planConf,
+		payment:  payment,
+		auth:     auth,
+		storage:  storage,
+	}
 }
+
 
 type AdminPlanSetting struct {
 	PlanKey           string    `json:"plan_key"`
@@ -132,9 +147,13 @@ type DashboardStats struct {
 	TotalUsers        int            `json:"total_users"`
 	ActiveUsers       int            `json:"active_users"`
 	GuestUsers        int            `json:"guest_users"`
+	NewUsersToday     int            `json:"new_users_today"`
 	PlanBreakdown     map[string]int `json:"plan_breakdown"`
 	GuestImages       int            `json:"guest_images"`
 	GuestStorageBytes int64          `json:"guest_storage_bytes"`
+	TotalStorageBytes int64          `json:"total_storage_bytes"`
+	TotalImages       int            `json:"total_images"`
+	TotalRevenueTHB   int            `json:"total_revenue_thb"`
 }
 
 func (s *Service) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
@@ -143,6 +162,9 @@ func (s *Service) GetDashboardStats(ctx context.Context) (*DashboardStats, error
 		return nil, err
 	}
 	stats := &DashboardStats{PlanBreakdown: make(map[string]int)}
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
 	for _, u := range users {
 		stats.TotalUsers++
 		if u.IsActive {
@@ -151,21 +173,42 @@ func (s *Service) GetDashboardStats(ctx context.Context) (*DashboardStats, error
 		if u.IsGuest {
 			stats.GuestUsers++
 		}
+		if u.CreatedAt.After(startOfDay) {
+			stats.NewUsersToday++
+		}
 		stats.PlanBreakdown[string(u.Plan)]++
+
+		if q, qErr := s.quota.GetUserQuota(ctx, u.ID); qErr == nil {
+			stats.TotalStorageBytes += q.UsedStorageBytes
+			stats.TotalImages += q.ImageCount
+		}
 	}
 
 	guestCount, guestSize, err := s.image.GetGuestStats(ctx)
 	if err == nil {
 		stats.GuestImages = guestCount
 		stats.GuestStorageBytes = guestSize
+		stats.TotalStorageBytes += guestSize
+		stats.TotalImages += guestCount
 	}
 
 	// Fetch active guest uploader counts in the last 24h as "Guest Users"
 	activeGuestIPs, err := s.image.GetUniqueGuestIPCount(ctx, time.Now().Add(-24*time.Hour))
 	if err == nil && activeGuestIPs > 0 {
 		stats.GuestUsers = activeGuestIPs
-		stats.TotalUsers += activeGuestIPs
 	}
+
+	// Calculate revenue from paid payment transactions
+	if s.payment != nil {
+		if txs, _, pErr := s.payment.ListPaymentTransactions(ctx, 1000, 0); pErr == nil {
+			for _, tx := range txs {
+				if tx.Status == ent.PaymentStatusPaid {
+					stats.TotalRevenueTHB += tx.AmountTHB
+				}
+			}
+		}
+	}
+
 
 	return stats, nil
 }
@@ -200,15 +243,39 @@ func toAdminUser(u *ent.UserEntity) AdminUser {
 	}
 }
 
-func (s *Service) ListUsers(ctx context.Context) ([]AdminUser, error) {
+type UserFilter struct {
+	Query    string
+	Plan     string
+	IsActive *bool
+	IsAdmin  *bool
+}
+
+func (s *Service) ListUsers(ctx context.Context, filter UserFilter) ([]AdminUser, error) {
 	users, err := s.user.GetListUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]AdminUser, 0, len(users))
 	for _, u := range users {
+		if filter.Plan != "" && !strings.EqualFold(string(u.Plan), filter.Plan) {
+			continue
+		}
+		if filter.IsActive != nil && u.IsActive != *filter.IsActive {
+			continue
+		}
+		if filter.IsAdmin != nil && u.IsAdmin != *filter.IsAdmin {
+			continue
+		}
+		if filter.Query != "" {
+			qLower := strings.ToLower(filter.Query)
+			emailMatch := u.Email != nil && strings.Contains(strings.ToLower(*u.Email), qLower)
+			userMatch := u.Username != nil && strings.Contains(strings.ToLower(*u.Username), qLower)
+			if !emailMatch && !userMatch {
+				continue
+			}
+		}
+
 		au := toAdminUser(u)
-		// Attach quota inline (best-effort, ignore errors)
 		if q, qErr := s.quota.GetUserQuota(ctx, u.ID); qErr == nil {
 			au.UsedStorageBytes = &q.UsedStorageBytes
 			au.ImageCount = &q.ImageCount
@@ -244,6 +311,9 @@ func (s *Service) SetUserPlan(ctx context.Context, id uuid.UUID, plan string) er
 }
 
 func (s *Service) SetUserActive(ctx context.Context, id uuid.UUID, active bool) error {
+	if !active && s.auth != nil {
+		_ = s.auth.RevokeAuthSessionsByUserID(ctx, id)
+	}
 	return s.user.SetUserActive(ctx, id, active)
 }
 
@@ -264,5 +334,40 @@ func (s *Service) SetUserAdmin(ctx context.Context, id uuid.UUID, isAdmin bool) 
 }
 
 func (s *Service) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	if s.auth != nil {
+		_ = s.auth.RevokeAuthSessionsByUserID(ctx, id)
+	}
 	return s.user.DeleteUser(ctx, id)
 }
+
+// --- Content Moderation ---
+
+func (s *Service) ListAllImages(ctx context.Context, limit int, offset int) ([]*ent.ImageEntity, int, error) {
+	return s.image.ListAllImages(ctx, limit, offset)
+}
+
+func (s *Service) DeleteImageByAdmin(ctx context.Context, imageID uuid.UUID) error {
+	img, err := s.image.GetImageByID(ctx, imageID)
+	if err != nil {
+		return err
+	}
+
+	var fileSize int64
+	if img.StorageID != uuid.Nil && s.storage != nil {
+		if st, stErr := s.storage.GetStorageByID(ctx, img.StorageID); stErr == nil && st != nil {
+			fileSize = st.FileSize
+		}
+		_ = s.storage.DeleteStorage(ctx, img.StorageID)
+	}
+
+	if img.UserID != nil {
+		_, _ = s.quota.AddToUserQuota(ctx, *img.UserID, entitiesdto.AddToUserQuota{
+			StorageDelta:    -fileSize,
+			ImageCountDelta: -1,
+		})
+	}
+
+	return s.image.DeleteImage(ctx, imageID)
+}
+
+

@@ -10,18 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// ObjectEntity defines the interface for object entity operations such as create, retrieve, update, and soft delete.
-type ExampleEntity interface {
-	CreateExample(ctx context.Context, userID uuid.UUID) (*ent.Example, error)
-	GetExampleByID(ctx context.Context, id uuid.UUID) (*ent.Example, error)
-	UpdateExampleByID(ctx context.Context, id uuid.UUID, status ent.ExampleStatus) (*ent.Example, error)
-	SoftDeleteExampleByID(ctx context.Context, id uuid.UUID) error
-	ListExamplesByStatus(ctx context.Context, status ent.ExampleStatus) ([]*ent.Example, error)
-}
-type ExampleTwoEntity interface {
-	CreateExampleTwo(ctx context.Context, userID uuid.UUID) (*ent.Example, error)
-}
-
 type UserEntity interface {
 	CreateUser(ctx context.Context, user entitiesdto.CreateUser) (*ent.UserEntity, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error)
@@ -36,7 +24,16 @@ type UserEntity interface {
 	SetUserActive(ctx context.Context, id uuid.UUID, isActive bool) error
 	UpdateUserPassword(ctx context.Context, id uuid.UUID, password entitiesdto.UpdateUserPassword) (*ent.UserEntity, error)
 	SetUserAdmin(ctx context.Context, id uuid.UUID, isAdmin bool) error
+	SetUserEmailVerified(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+
+	CreatePasswordResetToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*ent.PasswordResetTokenEntity, error)
+	GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (*ent.PasswordResetTokenEntity, error)
+	MarkPasswordResetTokenUsed(ctx context.Context, id uuid.UUID) error
+
+	CreateEmailVerificationToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*ent.EmailVerificationTokenEntity, error)
+	GetEmailVerificationTokenByHash(ctx context.Context, tokenHash string) (*ent.EmailVerificationTokenEntity, error)
+	DeleteEmailVerificationToken(ctx context.Context, id uuid.UUID) error
 }
 
 type StorageEntity interface {
@@ -58,9 +55,11 @@ type ImageEntity interface {
 	UpdateImage(ctx context.Context, id uuid.UUID, image entitiesdto.UpdateImage) (*ent.ImageEntity, error)
 	DeleteImage(ctx context.Context, id uuid.UUID) error
 	ListExpiredImages(ctx context.Context, before time.Time) ([]*ent.ImageEntity, error)
+	ListAllImages(ctx context.Context, limit int, offset int) ([]*ent.ImageEntity, int, error)
 	GetGuestStats(ctx context.Context) (int, int64, error)
 	GetUniqueGuestIPCount(ctx context.Context, since time.Time) (int, error)
 }
+
 
 type AuthEntity interface {
 	CreateAuthSession(ctx context.Context, auth entitiesdto.CreateAuthSession) (*ent.AuthSessionEntity, error)
@@ -97,4 +96,6 @@ type PaymentTransactionEntity interface {
 
 type AuditEntity interface {
 	CreateAuditLog(ctx context.Context, log entitiesdto.CreateAuditLog) error
+	ListAuditLogs(ctx context.Context, filter entitiesdto.ListAuditLogsFilter) ([]*ent.AuditLogEntity, int, error)
 }
+

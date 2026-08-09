@@ -15,6 +15,7 @@ const (
 	PaymentStatusFailed    PaymentStatus = "failed"
 	PaymentStatusCancelled PaymentStatus = "cancelled"
 	PaymentStatusExpired   PaymentStatus = "expired"
+	PaymentStatusRefunded  PaymentStatus = "refunded"
 )
 
 type PaymentTransactionEntity struct {

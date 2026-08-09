@@ -21,6 +21,15 @@ type getPresignURLQuery struct {
 	URL  string `form:"url"`
 }
 
+func getCallerID(ctx *gin.Context) *uuid.UUID {
+	if rawID, exists := ctx.Get("auth_user_id"); exists {
+		if parsedID, ok := rawID.(uuid.UUID); ok && parsedID != uuid.Nil {
+			return &parsedID
+		}
+	}
+	return nil
+}
+
 func (c *Controller) GetFile(ctx *gin.Context) {
 	var req getFileURI
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -34,7 +43,8 @@ func (c *Controller) GetFile(ctx *gin.Context) {
 		return
 	}
 
-	item, err := c.svc.GetFile(ctx.Request.Context(), id)
+	callerID := getCallerID(ctx)
+	item, err := c.svc.GetFile(ctx.Request.Context(), id, callerID)
 	if err != nil {
 		if errors.Is(err, ErrStorageNotFound) {
 			_ = base.JSON(ctx, 404, i18n.BadRequest, nil, nil)
@@ -60,6 +70,7 @@ func (c *Controller) GetPresignURL(ctx *gin.Context) {
 
 	var item *ent.StorageEntity
 	var err error
+	callerID := getCallerID(ctx)
 
 	if req.ID != "" {
 		id, parseErr := uuid.Parse(req.ID)
@@ -68,11 +79,11 @@ func (c *Controller) GetPresignURL(ctx *gin.Context) {
 			return
 		}
 
-		item, err = c.svc.GetPresignURLByID(ctx.Request.Context(), id)
+		item, err = c.svc.GetPresignURLByID(ctx.Request.Context(), id, callerID)
 	} else if req.Code != "" {
-		item, err = c.svc.GetPresignURLByShortCode(ctx.Request.Context(), req.Code)
+		item, err = c.svc.GetPresignURLByShortCode(ctx.Request.Context(), req.Code, callerID)
 	} else if req.URL != "" {
-		item, err = c.svc.GetPresignURL(ctx.Request.Context(), req.URL)
+		item, err = c.svc.GetPresignURL(ctx.Request.Context(), req.URL, callerID)
 	} else {
 		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
 		return

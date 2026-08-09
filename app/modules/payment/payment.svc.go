@@ -15,6 +15,7 @@ import (
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	"pichost.io/app/modules/entities/ent"
 	entitiesinf "pichost.io/app/modules/entities/inf"
+	mailerinf "pichost.io/app/modules/mailer/inf"
 	"pichost.io/internal/config"
 
 	"github.com/google/uuid"
@@ -31,6 +32,7 @@ type Options struct {
 
 type Service struct {
 	*Options
+	mailer mailerinf.Mailer
 }
 
 func newService(opt *Options) *Service {
@@ -73,11 +75,20 @@ func (s *Service) buildCheckoutURL(checkoutReference string) *string {
 }
 
 type CreateCheckoutInput struct {
-	UserID  uuid.UUID
-	PlanKey string
+	UserID   uuid.UUID
+	PlanKey  string
+	Provider string
 }
 
 func (s *Service) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*ent.PaymentTransactionEntity, error) {
+	user, err := s.userEnt.GetUserByID(ctx, in.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if user.Email != nil && user.EmailVerifiedAt == nil {
+		return nil, ErrEmailVerificationRequired
+	}
+
 	planKey := normalizePlanKey(in.PlanKey)
 	if planKey == "" {
 		return nil, ErrPaymentPlanUnavailable
@@ -97,13 +108,18 @@ func (s *Service) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*
 	checkoutReference := strings.ToUpper(uuid.NewString())
 	expiresAt := time.Now().Add(time.Duration(s.Val.CheckoutTTLMinutes) * time.Minute)
 
+	provider := strings.ToLower(strings.TrimSpace(in.Provider))
+	if provider == "" {
+		provider = string(ProviderManual)
+	}
+
 	row, err := s.paymentEnt.CreatePaymentTransaction(ctx, entitiesdto.CreatePaymentTransaction{
 		UserID:            in.UserID,
 		PlanKey:           planKey,
 		AmountTHB:         plan.MonthlyPriceTHB,
 		Currency:          "THB",
 		Status:            ent.PaymentStatusPending,
-		Provider:          "manual",
+		Provider:          provider,
 		CheckoutReference: checkoutReference,
 		PaymentURL:        s.buildCheckoutURL(checkoutReference),
 		ExpiresAt:         expiresAt,
@@ -240,7 +256,16 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		return nil, false, err
 	}
 
+	targetUser, _ := s.userEnt.GetUserByID(ctx, updated.UserID)
+
 	if nextStatus != ent.PaymentStatusPaid {
+		if (nextStatus == ent.PaymentStatusFailed || nextStatus == ent.PaymentStatusCancelled) && s.mailer != nil && targetUser != nil && targetUser.Email != nil {
+			reasonStr := ""
+			if reviewReason != nil {
+				reasonStr = *reviewReason
+			}
+			_ = s.mailer.SendSlipRejected(ctx, *targetUser.Email, reasonStr, true)
+		}
 		return updated, false, nil
 	}
 
@@ -265,6 +290,10 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 	// Renewing clears any previous cancellation intent.
 	if _, err = s.userEnt.SetUserPlanExpiry(ctx, updated.UserID, &newExpiresAt, true); err != nil {
 		return nil, false, err
+	}
+
+	if s.mailer != nil && updatedUser.Email != nil {
+		_ = s.mailer.SendSlipApproved(ctx, *updatedUser.Email, planValue, true)
 	}
 
 	// Send telegram notification on plan purchase & confirmation
@@ -328,6 +357,58 @@ func (s *Service) SubmitSlip(ctx context.Context, in SubmitSlipInput) (*ent.Paym
 
 func (s *Service) AdminListPayments(ctx context.Context, limit int, offset int) ([]*ent.PaymentTransactionEntity, int, error) {
 	return s.paymentEnt.ListPaymentTransactions(ctx, limit, offset)
+}
+
+type RefundPaymentInput struct {
+	PaymentID  uuid.UUID
+	Reason     *string
+	ReviewedBy *uuid.UUID
+}
+
+func (s *Service) RefundPayment(ctx context.Context, in RefundPaymentInput) (*ent.PaymentTransactionEntity, error) {
+	row, err := s.paymentEnt.GetPaymentTransactionByID(ctx, in.PaymentID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPaymentNotFound
+		}
+		return nil, err
+	}
+
+	if row.Status == ent.PaymentStatusRefunded {
+		return nil, ErrPaymentAlreadyRefunded
+	}
+	if row.Status != ent.PaymentStatusPaid {
+		return nil, ErrPaymentNotPaidForRefund
+	}
+
+	var reason *string
+	if in.Reason != nil {
+		trimmed := strings.TrimSpace(*in.Reason)
+		if trimmed != "" {
+			reason = &trimmed
+		}
+	}
+
+	now := time.Now()
+	updated, err := s.paymentEnt.UpdatePaymentTransactionStatus(ctx, row.ID, entitiesdto.UpdatePaymentTransactionStatus{
+		Status:       ent.PaymentStatusRefunded,
+		ReviewReason: reason,
+		ReviewedBy:   in.ReviewedBy,
+		ReviewedAt:   &now,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	msg := fmt.Sprintf("💸 <b>Payment Refunded!</b>\n\n"+
+		"<b>User ID :</b> %s\n"+
+		"<b>Transaction ID :</b> %s\n"+
+		"<b>Amount :</b> %d THB\n"+
+		"<b>Plan Key :</b> %s\n",
+		updated.UserID.String(), updated.ID.String(), updated.AmountTHB, updated.PlanKey)
+	sendTelegramNotification(msg)
+
+	return updated, nil
 }
 
 type CancelSubscriptionInput struct {

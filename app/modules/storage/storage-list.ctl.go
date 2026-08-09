@@ -5,10 +5,22 @@ import (
 	"pichost.io/config/i18n"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func (c *Controller) ListFiles(ctx *gin.Context) {
-	items, err := c.svc.ListFiles(ctx.Request.Context())
+	rawID, exists := ctx.Get("auth_user_id")
+	if !exists {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+	userID, ok := rawID.(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		base.Unauthorized(ctx, i18n.Unauthorized, nil)
+		return
+	}
+
+	items, err := c.svc.ListFiles(ctx.Request.Context(), userID)
 	if err != nil {
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return

@@ -14,3 +14,14 @@ type CreateAuditLog struct {
 	Status       string         // "success" | "failure"  (defaults to "success")
 	ErrorCode    *string        // application error code when status == "failure"
 }
+
+type ListAuditLogsFilter struct {
+	UserID    *uuid.UUID
+	Action    *string
+	Status    *string
+	FromDate  *string
+	ToDate    *string
+	Limit     int
+	Offset    int
+}
+

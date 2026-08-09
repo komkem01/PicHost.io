@@ -1,5 +1,7 @@
--- +goose Up
--- +goose StatementBegin
+SET statement_timeout = 0;
+
+--bun:split
+
 ALTER TABLE payment_transactions
     ADD COLUMN IF NOT EXISTS review_reason text,
     ADD COLUMN IF NOT EXISTS reviewed_by uuid,
@@ -28,4 +30,3 @@ COMMENT ON TABLE payment_transactions IS 'Records user checkout attempts and pay
 COMMENT ON COLUMN payment_transactions.review_reason IS 'Admin review note or rejection reason for manual payment verification.';
 COMMENT ON COLUMN payment_transactions.reviewed_by IS 'Admin user id who reviewed and decided the payment status.';
 COMMENT ON COLUMN payment_transactions.reviewed_at IS 'Timestamp when an admin reviewed and finalized the payment status.';
--- +goose StatementEnd
