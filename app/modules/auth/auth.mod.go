@@ -23,6 +23,10 @@ type Config struct {
 	RefreshCookieName      string
 	RefreshCookieDomain    string
 	RefreshCookieSecure    bool
+	// RefreshCookieSameSite is "lax", "strict" or "none". Cross-site frontends
+	// (frontend and API on different registrable domains) require "none", which
+	// browsers only honour together with Secure.
+	RefreshCookieSameSite string
 	GoogleClientID         string
 	GoogleClientSecret     string
 	GoogleRedirectURL      string
@@ -43,6 +47,9 @@ func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt en
 	}
 	if conf.Val.RefreshCookieName == "" {
 		conf.Val.RefreshCookieName = "refresh_token"
+	}
+	if conf.Val.RefreshCookieSameSite == "" {
+		conf.Val.RefreshCookieSameSite = "lax"
 	}
 	if conf.Val.JWTSecret == "" {
 		conf.Val.JWTSecret = "change-me-in-production"

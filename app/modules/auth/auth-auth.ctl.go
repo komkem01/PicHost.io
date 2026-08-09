@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"pichost.io/app/modules/entities/ent"
@@ -246,7 +247,7 @@ func (c *Controller) GoogleLogin(ctx *gin.Context) {
 		c.svc.conf.Val.GoogleStateTTLSeconds,
 		"/",
 		c.svc.conf.Val.RefreshCookieDomain,
-		c.svc.conf.Val.RefreshCookieSecure,
+		c.cookieSecure(),
 		true,
 	)
 
@@ -296,7 +297,7 @@ func (c *Controller) GoogleCallback(ctx *gin.Context) {
 		-1,
 		"/",
 		c.svc.conf.Val.RefreshCookieDomain,
-		c.svc.conf.Val.RefreshCookieSecure,
+		c.cookieSecure(),
 		true,
 	)
 
@@ -312,28 +313,51 @@ func (c *Controller) GoogleCallback(ctx *gin.Context) {
 	ctx.Redirect(http.StatusFound, callbackURL)
 }
 
+// sameSiteMode resolves the configured SameSite policy. Cross-site deployments
+// (frontend on one domain, API on another) must use "none" or the browser drops
+// the refresh cookie entirely on both the set and the send.
+func (c *Controller) sameSiteMode() http.SameSite {
+	switch strings.ToLower(c.svc.conf.Val.RefreshCookieSameSite) {
+	case "none":
+		return http.SameSiteNoneMode
+	case "strict":
+		return http.SameSiteStrictMode
+	default:
+		return http.SameSiteLaxMode
+	}
+}
+
+// cookieSecure forces Secure whenever SameSite=None, since browsers reject the
+// combination of SameSite=None without Secure.
+func (c *Controller) cookieSecure() bool {
+	if c.sameSiteMode() == http.SameSiteNoneMode {
+		return true
+	}
+	return c.svc.conf.Val.RefreshCookieSecure
+}
+
 func (c *Controller) setRefreshCookie(ctx *gin.Context, refreshToken string) {
-	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetSameSite(c.sameSiteMode())
 	ctx.SetCookie(
 		c.svc.conf.Val.RefreshCookieName,
 		refreshToken,
 		c.svc.conf.Val.RefreshTokenTTLSeconds,
 		"/",
 		c.svc.conf.Val.RefreshCookieDomain,
-		c.svc.conf.Val.RefreshCookieSecure,
+		c.cookieSecure(),
 		true,
 	)
 }
 
 func (c *Controller) clearRefreshCookie(ctx *gin.Context) {
-	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetSameSite(c.sameSiteMode())
 	ctx.SetCookie(
 		c.svc.conf.Val.RefreshCookieName,
 		"",
 		-1,
 		"/",
 		c.svc.conf.Val.RefreshCookieDomain,
-		c.svc.conf.Val.RefreshCookieSecure,
+		c.cookieSecure(),
 		true,
 	)
 }
