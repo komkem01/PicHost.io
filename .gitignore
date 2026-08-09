@@ -7,3 +7,4 @@ tmp/
 # storage/
 .DS_Store
 todo_tree.example
+build-errors.log
