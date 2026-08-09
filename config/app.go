@@ -2,6 +2,7 @@ package config
 
 import (
 	"pichost.io/app/modules/admin"
+	"pichost.io/app/modules/audit"
 	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/image"
 	"pichost.io/app/modules/mailer"
@@ -49,6 +50,7 @@ type Config struct {
 	Admin   admin.Config
 	Payment payment.Config
 	Mailer  mailer.Config
+	Audit   audit.Config
 }
 
 var App = Config{
@@ -102,4 +104,5 @@ var App = Config{
 		From:        "PicHost.io <noreply@pichost.io>",
 		FrontendURL: "http://localhost:3000",
 	},
+	Audit: audit.Config{},
 }
