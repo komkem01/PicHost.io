@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	dto "pichost.io/internal/database/dto"
 
@@ -63,6 +64,11 @@ func (dbs *DatabaseService) Register(ctx context.Context, opts map[string]*dto.O
 			return err
 		}
 		sqldb := stdlib.OpenDB(*config)
+		sqldb.SetMaxOpenConns(25)
+		sqldb.SetMaxIdleConns(10)
+		sqldb.SetConnMaxLifetime(5 * time.Minute)
+		sqldb.SetConnMaxIdleTime(2 * time.Minute)
+
 		dbs.dbMap[key] = bun.NewDB(sqldb, pgdialect.New())
 		if err := dbs.dbMap[key].PingContext(ctx); err != nil {
 			return err

@@ -3,6 +3,7 @@ package routes
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"pichost.io/app/modules"
 
@@ -13,9 +14,46 @@ import (
 )
 
 func Router(app *gin.Engine, mod *modules.Modules) {
-	// 0.4: Global middleware applied FIRST before any routes
+	// 0.1: Restrict CORS origins using flexible allowlist matching
+	allowedOriginsRaw := mod.Conf.Svc.Config().CorsAllowedOrigins
+	allowedOrigins := make(map[string]bool)
+	allowAll := false
+	for _, o := range strings.Split(allowedOriginsRaw, ",") {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o == "*" || o == "" {
+			allowAll = true
+		} else {
+			allowedOrigins[o] = true
+		}
+	}
+
+	// 0.2: CORS middleware MUST be applied FIRST before any routes/telemetry so preflight OPTIONS requests return immediately without delay
+	app.Use(cors.New(cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			if allowAll || origin == "" {
+				return true
+			}
+			cleanOrigin := strings.TrimRight(strings.TrimSpace(origin), "/")
+			if allowedOrigins[cleanOrigin] {
+				return true
+			}
+			// Automatically allow Vercel deployment domains
+			if strings.HasSuffix(cleanOrigin, ".vercel.app") {
+				return true
+			}
+			return false
+		},
+		AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
+		AllowHeaders:           []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With", "X-Trace-ID"},
+		ExposeHeaders:          []string{"X-Trace-ID", "Content-Disposition", "Content-Length"},
+		AllowCredentials:       true,
+		AllowBrowserExtensions: true,
+		AllowWebSockets:        true,
+		MaxAge:                 12 * time.Hour,
+	}))
+
+	// 0.3: Telemetry & Tracing middleware
 	app.Use(otelgin.Middleware(mod.Conf.Svc.Config().AppName),
-		// Middleware add trace id to response header
 		func(ctx *gin.Context) {
 			spanCtx := trace.SpanContextFromContext(ctx.Request.Context())
 			if spanCtx.IsValid() {
@@ -24,28 +62,6 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 			ctx.Next()
 		},
 	)
-
-	// 0.3: Restrict CORS origins using exact match allowlist from config
-	allowedOriginsRaw := mod.Conf.Svc.Config().CorsAllowedOrigins
-	allowedOrigins := make(map[string]bool)
-	for _, o := range strings.Split(allowedOriginsRaw, ",") {
-		o = strings.TrimSpace(o)
-		if o != "" {
-			allowedOrigins[o] = true
-		}
-	}
-
-	app.Use(cors.New(cors.Config{
-		AllowOriginFunc: func(origin string) bool {
-			return allowedOrigins[origin]
-		},
-		AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
-		AllowHeaders:           []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
-		ExposeHeaders:          []string{"X-Trace-ID"},
-		AllowCredentials:       true,
-		AllowBrowserExtensions: true,
-		AllowWebSockets:        true,
-	}))
 
 	// Public static routes
 	app.GET("/healthz", func(ctx *gin.Context) {
