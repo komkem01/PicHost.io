@@ -17,7 +17,7 @@ var GuestPlan = PlanLimits{
 	MaxImages:      10,
 	RetentionHours: 24,
 	AllowPrivate:   false,
-	AllowedMIMEs:   []string{"image/jpeg", "image/png"},
+	AllowedMIMEs:   []string{"image/jpeg", "image/png", "video/mp4"},
 }
 
 // planLimitsMap maps each PlanType to its limits.
@@ -28,7 +28,7 @@ var planLimitsMap = map[PlanType]PlanLimits{
 		MaxImages:      200,
 		RetentionHours: 0,
 		AllowPrivate:   false,
-		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp"},
+		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"},
 	},
 	PlanTypeBasic: {
 		StorageBytes:   10 * 1024 * 1024 * 1024, // 10 GB
@@ -36,7 +36,7 @@ var planLimitsMap = map[PlanType]PlanLimits{
 		MaxImages:      0,
 		RetentionHours: 0,
 		AllowPrivate:   true,
-		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"},
+		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/mkv"},
 	},
 	PlanTypePro: {
 		StorageBytes:   100 * 1024 * 1024 * 1024, // 100 GB
@@ -44,7 +44,7 @@ var planLimitsMap = map[PlanType]PlanLimits{
 		MaxImages:      0,
 		RetentionHours: 0,
 		AllowPrivate:   true,
-		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/bmp", "image/tiff", "image/heic", "image/heif"},
+		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/bmp", "image/tiff", "image/heic", "image/heif", "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/avi", "video/mkv"},
 	},
 	PlanTypeEnterprise: {
 		StorageBytes:   -1, // unlimited
