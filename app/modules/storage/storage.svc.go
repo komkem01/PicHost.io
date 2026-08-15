@@ -26,17 +26,19 @@ import (
 )
 
 type Service struct {
-	tracer   trace.Tracer
-	store    entitiesinf.StorageEntity
-	imageEnt entitiesinf.ImageEntity
-	conf     *config.Config[Config]
+	tracer    trace.Tracer
+	store     entitiesinf.StorageEntity
+	imageEnt  entitiesinf.ImageEntity
+	userQuota entitiesinf.UserQuotaEntity
+	conf      *config.Config[Config]
 }
 
 type Options struct {
 	*config.Config[Config]
-	tracer   trace.Tracer
-	store    entitiesinf.StorageEntity
-	imageEnt entitiesinf.ImageEntity
+	tracer    trace.Tracer
+	store     entitiesinf.StorageEntity
+	imageEnt  entitiesinf.ImageEntity
+	userQuota entitiesinf.UserQuotaEntity
 }
 
 func newService(opt *Options) *Service {

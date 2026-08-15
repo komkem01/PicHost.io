@@ -51,6 +51,7 @@ func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
 	imageAuth.Use(mod.Auth.Ctl.AuthMiddleware())
 	{
 		imageAuth.GET("", mod.Image.Ctl.ListImages)
+		imageAuth.DELETE("/:id", mod.Storage.Ctl.DeleteFile)
 	}
 }
 

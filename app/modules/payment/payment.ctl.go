@@ -62,11 +62,14 @@ func (c *Controller) CreateCheckout(ctx *gin.Context) {
 		Provider: req.Provider,
 	})
 	if err != nil {
-		if errors.Is(err, ErrPaymentPlanUnavailable) {
+		switch {
+		case errors.Is(err, ErrEmailVerificationRequired):
+			base.ValidateFailed(ctx, err.Error(), gin.H{"error": err.Error()})
+		case errors.Is(err, ErrPaymentPlanUnavailable):
 			base.BadRequest(ctx, err.Error(), nil)
-			return
+		default:
+			base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		}
-		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}
 

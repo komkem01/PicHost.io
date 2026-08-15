@@ -64,9 +64,10 @@ func modulesInit() {
 
 	authMod := auth.New(config.Conf[auth.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	authMod.SetMailer(mailerMod.Svc)
+	authMod.SetImageEntity(entitiesMod.Svc)
 
 	usersMod := users.New(config.Conf[users.Config](confMod.Svc), entitiesMod.Svc)
-	storageMod := storage.New(config.Conf[storage.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc)
+	storageMod := storage.New(config.Conf[storage.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	quotaMod := quota.New(config.Conf[quota.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	imageMod := image.New(config.Conf[image.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, quotaMod.Svc)
 	paymentMod := payment.New(config.Conf[payment.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)

@@ -58,6 +58,8 @@ type ImageEntity interface {
 	ListAllImages(ctx context.Context, limit int, offset int) ([]*ent.ImageEntity, int, error)
 	GetGuestStats(ctx context.Context) (int, int64, error)
 	GetUniqueGuestIPCount(ctx context.Context, since time.Time) (int, error)
+	IncrementImageViewCount(ctx context.Context, id uuid.UUID) error
+	GetTotalImageViewsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 
 

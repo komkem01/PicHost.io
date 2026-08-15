@@ -16,4 +16,5 @@ type ImageEntity struct {
 	IsPrivate bool       `bun:"is_private,notnull"`
 	ExpiresAt *time.Time `bun:"expires_at"`
 	CreatedAt time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+	ViewCount int64      `bun:"view_count,notnull,default:0"`
 }

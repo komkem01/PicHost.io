@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"net/smtp"
 	"strings"
 
@@ -119,9 +120,19 @@ func (s *Service) sendSMTP(ctx context.Context, to, subject, htmlBody, textBody 
 		return nil
 	}
 
-	from := s.conf.Val.From
-	if from == "" {
-		from = "noreply@pichost.io"
+	fromHeader := s.conf.Val.From
+	if fromHeader == "" {
+		fromHeader = "PicHost.io <noreply@pichost.io>"
+	}
+
+	// Envelope sender must be a raw email address without display name brackets (e.g. "user@domain.com")
+	envelopeFrom := strings.TrimSpace(s.conf.Val.SMTPUser)
+	if envelopeFrom == "" {
+		if parsed, err := mail.ParseAddress(fromHeader); err == nil && parsed.Address != "" {
+			envelopeFrom = parsed.Address
+		} else {
+			envelopeFrom = "noreply@pichost.io"
+		}
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.conf.Val.SMTPHost, s.conf.Val.SMTPPort)
@@ -129,15 +140,16 @@ func (s *Service) sendSMTP(ctx context.Context, to, subject, htmlBody, textBody 
 		addr = fmt.Sprintf("%s:587", s.conf.Val.SMTPHost)
 	}
 
+	smtpPassword := strings.ReplaceAll(s.conf.Val.SMTPPassword, " ", "")
+
 	var auth smtp.Auth
-	if s.conf.Val.SMTPUser != "" && s.conf.Val.SMTPPassword != "" {
-		auth = smtp.PlainAuth("", s.conf.Val.SMTPUser, s.conf.Val.SMTPPassword, s.conf.Val.SMTPHost)
+	if s.conf.Val.SMTPUser != "" && smtpPassword != "" {
+		auth = smtp.PlainAuth("", s.conf.Val.SMTPUser, smtpPassword, s.conf.Val.SMTPHost)
 	}
 
-	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
-	msg := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n%s\r\n%s", from, to, subject, mime, htmlBody))
+	msg := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s", fromHeader, to, subject, htmlBody))
 
-	err := smtp.SendMail(addr, auth, from, []string{to}, msg)
+	err := smtp.SendMail(addr, auth, envelopeFrom, []string{to}, msg)
 	if err != nil {
 		s.log.Errf("SMTP send error: %v", err)
 		return err

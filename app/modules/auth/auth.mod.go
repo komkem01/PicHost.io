@@ -87,3 +87,7 @@ func (m *Module) SetMailer(mailer mailerinf.Mailer) {
 	m.Svc.mailer = mailer
 }
 
+func (m *Module) SetImageEntity(imageEnt entitiesinf.ImageEntity) {
+	m.Svc.imageEnt = imageEnt
+}
+

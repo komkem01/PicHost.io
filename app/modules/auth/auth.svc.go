@@ -30,6 +30,7 @@ type Service struct {
 	auth     entitiesinf.AuthEntity
 	quotaEnt entitiesinf.UserQuotaEntity
 	planEnt  entitiesinf.PlanSettingEntity
+	imageEnt entitiesinf.ImageEntity
 	mailer   mailerinf.Mailer
 	conf     *config.Config[Config]
 }
