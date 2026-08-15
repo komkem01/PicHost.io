@@ -18,7 +18,7 @@ func WarpH(router *gin.RouterGroup, prefix string, handler http.Handler) {
 func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 	storagePublic := r.Group("/storage")
 	{
-		storagePublic.POST("/upload-file-guest", ratelimit.New(nil, "guest_upload", 5, time.Minute, ratelimit.IPKeyFunc), mod.Storage.Ctl.UploadFileGuest)
+		storagePublic.POST("/upload-file-guest", ratelimit.New(nil, "guest_upload", 60, time.Minute, ratelimit.IPKeyFunc), mod.Storage.Ctl.UploadFileGuest)
 	}
 
 	storageOptAuth := r.Group("/storage")
@@ -31,8 +31,8 @@ func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 	storageAuth := r.Group("/storage")
 	storageAuth.Use(mod.Auth.Ctl.AuthMiddleware())
 	{
-		storageAuth.POST("/upload", ratelimit.New(nil, "upload", 20, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.Upload)
-		storageAuth.POST("/upload-file", ratelimit.New(nil, "upload_file", 20, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.UploadFile)
+		storageAuth.POST("/upload", ratelimit.New(nil, "upload", 200, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.Upload)
+		storageAuth.POST("/upload-file", ratelimit.New(nil, "upload_file", 200, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.UploadFile)
 		storageAuth.GET("/files", mod.Storage.Ctl.ListFiles)
 		storageAuth.DELETE("/files/:id", mod.Storage.Ctl.DeleteFile)
 	}
