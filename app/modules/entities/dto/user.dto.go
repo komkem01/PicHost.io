@@ -14,6 +14,12 @@ type UpdateUser struct {
 	IsActive *bool   `json:"is_active"`
 	Plan     *string `json:"plan"`
 	IsGuest  *bool   `json:"is_guest"`
+	// ClearEmailVerification, when true, resets email_verified_at to NULL in the
+	// same UPDATE statement that changes Email. Callers changing a user's email
+	// to a new address must set this so the DB is never left, even momentarily,
+	// with the new (unverified) address alongside a stale, still-set
+	// email_verified_at from the previous address.
+	ClearEmailVerification bool `json:"-"`
 }
 
 type UpdateUserPlan struct {

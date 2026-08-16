@@ -16,6 +16,7 @@ type UserEntity interface {
 	GetListUser(ctx context.Context) ([]*ent.UserEntity, error)
 	GetUserByEmail(ctx context.Context, email string) (*ent.UserEntity, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, user entitiesdto.UpdateUser) (*ent.UserEntity, error)
+	ClearUserEmailVerified(ctx context.Context, id uuid.UUID) error
 	UpdateUserPlan(ctx context.Context, id uuid.UUID, plan entitiesdto.UpdateUserPlan) (*ent.UserEntity, error)
 	SetUserPlanExpiry(ctx context.Context, id uuid.UUID, expiresAt *time.Time, clearCancellation bool) (*ent.UserEntity, error)
 	CancelUserPlan(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error)
@@ -66,7 +67,6 @@ type ImageEntity interface {
 	GetTotalImageViewsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 
-
 type AuthEntity interface {
 	CreateAuthSession(ctx context.Context, auth entitiesdto.CreateAuthSession) (*ent.AuthSessionEntity, error)
 	GetAuthSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*ent.AuthSessionEntity, error)
@@ -92,12 +92,37 @@ type PlanSettingEntity interface {
 
 type PaymentTransactionEntity interface {
 	CreatePaymentTransaction(ctx context.Context, in entitiesdto.CreatePaymentTransaction) (*ent.PaymentTransactionEntity, error)
+	// CreatePaymentTransactionIfNoOpen atomically enforces the one-open-checkout
+	// invariant: it locks the user row (FOR UPDATE) and any existing open
+	// (pending, or paid-but-unactivated) transaction in the same DB transaction,
+	// lazily expires a stale no-slip pending row, and only inserts the new row if
+	// none remains open. Concurrent checkout calls for the same user serialize on
+	// the user-row lock, so this does not rely on a unique index (which could
+	// fail to apply on top of pre-existing duplicate pending rows). Returns
+	// *entitiesdto.ErrOpenPaymentTransactionExists if an open checkout still
+	// blocks the new one.
+	CreatePaymentTransactionIfNoOpen(ctx context.Context, userID uuid.UUID, in entitiesdto.CreatePaymentTransaction) (*ent.PaymentTransactionEntity, error)
 	GetPaymentTransactionByID(ctx context.Context, id uuid.UUID) (*ent.PaymentTransactionEntity, error)
 	GetPaymentTransactionByCheckoutReference(ctx context.Context, checkoutReference string) (*ent.PaymentTransactionEntity, error)
 	ListPaymentTransactionsByUserID(ctx context.Context, userID uuid.UUID, limit int) ([]*ent.PaymentTransactionEntity, error)
+	// GetOpenPaymentTransactionByUserID returns the user's most recent transaction
+	// that is still "open": pending (including a submitted slip awaiting review),
+	// or paid but not yet activated (awaiting email verification). Returns
+	// sql.ErrNoRows when none exists. Used for read-only lookups (e.g. surfacing
+	// the current open payment); checkout creation goes through
+	// CreatePaymentTransactionIfNoOpen instead for atomicity.
+	GetOpenPaymentTransactionByUserID(ctx context.Context, userID uuid.UUID) (*ent.PaymentTransactionEntity, error)
 	UpdatePaymentTransactionStatus(ctx context.Context, id uuid.UUID, in entitiesdto.UpdatePaymentTransactionStatus) (*ent.PaymentTransactionEntity, error)
 	UpdatePaymentSlipStorageID(ctx context.Context, id uuid.UUID, in entitiesdto.UpdatePaymentSlipStorageID) (*ent.PaymentTransactionEntity, error)
 	ListPaymentTransactions(ctx context.Context, limit int, offset int) ([]*ent.PaymentTransactionEntity, int, error)
+	// ConfirmPaymentTransaction runs the confirm+activate flow in a single DB
+	// transaction, locking the payment row (and the user row when transitioning
+	// to paid) to make repeated/concurrent confirmations race-safe and idempotent.
+	ConfirmPaymentTransaction(ctx context.Context, in entitiesdto.ConfirmPaymentTransaction) (*entitiesdto.ConfirmPaymentTransactionResult, error)
+	// ActivatePendingEntitlements activates every paid-but-unactivated transaction
+	// for a user in one transaction, stacking durations deterministically in
+	// chronological order. Safe to call repeatedly (a replay activates nothing).
+	ActivatePendingEntitlements(ctx context.Context, userID uuid.UUID, subscriptionDuration time.Duration) (*entitiesdto.ActivateEntitlementsResult, error)
 }
 
 type AuditEntity interface {
@@ -122,4 +147,3 @@ type NotificationEntity interface {
 	MarkAllAsRead(ctx context.Context, userID *uuid.UUID, targetRole string) error
 	DeleteNotification(ctx context.Context, id uuid.UUID, userID *uuid.UUID) error
 }
-

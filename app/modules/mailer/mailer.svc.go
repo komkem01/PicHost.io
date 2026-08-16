@@ -298,6 +298,46 @@ func (s *Service) SendSlipApproved(ctx context.Context, to, planName string, isT
 	return nil
 }
 
+func (s *Service) SendPaymentAwaitingVerification(ctx context.Context, to, planName string, isTH bool) error {
+	subject := "Payment Received — Verify Your Email to Activate"
+	if isTH {
+		subject = "ได้รับการชำระเงินแล้ว — ยืนยันอีเมลเพื่อเปิดใช้งาน"
+	}
+
+	htmlTemplate := `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; background-color: #0c0c0e; color: #ffffff; padding: 40px 20px;">
+  <div style="max-width: 500px; margin: 0 auto; background: #141418; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 32px;">
+    <h2 style="color: #f59e0b; margin-top: 0;">{{.Title}}</h2>
+    <p style="color: #a1a1aa; line-height: 1.6;">{{.Message}}</p>
+    <p style="color: #71717a; font-size: 12px;">{{.Footer}}</p>
+  </div>
+</body>
+</html>
+`
+
+	title := "Payment Approved — Verify Your Email"
+	msg := fmt.Sprintf("Your payment for the %s plan has been approved. It will activate automatically as soon as you verify your email address. Please check your inbox for the verification link.", planName)
+	footer := "Didn't get the verification email? You can request a new one from your account settings."
+
+	if isTH {
+		title = "การชำระเงินได้รับการอนุมัติแล้ว — โปรดยืนยันอีเมล"
+		msg = fmt.Sprintf("การชำระเงินสำหรับแพ็กเกจ %s ของคุณได้รับการอนุมัติแล้ว แพ็กเกจจะเปิดใช้งานโดยอัตโนมัติทันทีที่คุณยืนยันอีเมล โปรดตรวจสอบกล่องจดหมายของคุณสำหรับลิงก์ยืนยัน", planName)
+		footer = "หากไม่ได้รับอีเมลยืนยัน คุณสามารถขอส่งใหม่ได้จากหน้าตั้งค่าบัญชีของคุณ"
+	}
+
+	tmpl, _ := template.New("payment_awaiting_verification").Parse(htmlTemplate)
+	var bodyBuf bytes.Buffer
+	_ = tmpl.Execute(&bodyBuf, map[string]string{"Title": title, "Message": msg, "Footer": footer})
+
+	go func() {
+		_ = s.SendEmail(context.Background(), to, subject, bodyBuf.String(), title+"\n\n"+msg)
+	}()
+	return nil
+}
+
 func (s *Service) SendSlipRejected(ctx context.Context, to, reason string, isTH bool) error {
 	subject := "Payment Verification Update"
 	if isTH {
