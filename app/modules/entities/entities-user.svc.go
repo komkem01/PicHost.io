@@ -168,6 +168,11 @@ func (s *Service) UpdateUserPassword(ctx context.Context, id uuid.UUID, password
 }
 
 func (s *Service) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, _ = s.db.NewDelete().TableExpr("email_verification_tokens").Where("user_id = ?", id).Exec(ctx)
+	_, _ = s.db.NewDelete().TableExpr("images").Where("user_id = ?", id).Exec(ctx)
+	_, _ = s.db.NewDelete().TableExpr("storage").Where("user_id = ?", id).Exec(ctx)
+	_, _ = s.db.NewDelete().TableExpr("payments").Where("user_id = ?", id).Exec(ctx)
+
 	_, err := s.db.NewDelete().
 		Model((*ent.UserEntity)(nil)).
 		Where("id = ?", id).
@@ -300,4 +305,15 @@ func (s *Service) DeleteEmailVerificationToken(ctx context.Context, id uuid.UUID
 		Exec(ctx)
 	return err
 }
+
+func (s *Service) RecordUserLogin(ctx context.Context, id uuid.UUID, ip *string) error {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("last_login_at = ?, login_count = login_count + 1, last_login_ip = ?, updated_at = ?", now, ip, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
 

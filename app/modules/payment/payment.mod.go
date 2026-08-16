@@ -57,3 +57,13 @@ func (m *Module) SetMailer(mailer mailerinf.Mailer) {
 	m.Svc.mailer = mailer
 }
 
+func (m *Module) SetAuditEntity(auditEnt entitiesinf.AuditEntity) {
+	m.Ctl.auditEnt = auditEnt
+}
+
+func (m *Module) SetNotificationEntity(notifEnt entitiesinf.NotificationEntity) {
+	m.Svc.notifEnt = notifEnt
+}
+
+
+

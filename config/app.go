@@ -6,6 +6,7 @@ import (
 	"pichost.io/app/modules/auth"
 	"pichost.io/app/modules/image"
 	"pichost.io/app/modules/mailer"
+	"pichost.io/app/modules/notification"
 	"pichost.io/app/modules/payment"
 	"pichost.io/app/modules/quota"
 
@@ -42,15 +43,16 @@ type Config struct {
 	Kafka kafka.Config
 	Log   log.Option
 
-	Auth    auth.Config
-	User    users.Config
-	Storage storage.Config
-	Image   image.Config
-	Quota   quota.Config
-	Admin   admin.Config
-	Payment payment.Config
-	Mailer  mailer.Config
-	Audit   audit.Config
+	Auth         auth.Config
+	User         users.Config
+	Storage      storage.Config
+	Image        image.Config
+	Quota        quota.Config
+	Admin        admin.Config
+	Payment      payment.Config
+	Mailer       mailer.Config
+	Audit        audit.Config
+	Notification notification.Config
 }
 
 var App = Config{

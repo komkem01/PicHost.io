@@ -52,6 +52,17 @@ func (c *Controller) CreateImage(ctx *gin.Context) {
 		IsGuest:   isGuest,
 	})
 	if err != nil {
+		errStr := err.Error()
+		var uidP *uuid.UUID
+		if !isGuest {
+			uidP = &userID
+		}
+		c.recordAudit("image.create", "failure", uidP, strPtr("image"), &storageID, ctx, map[string]any{
+			"storage_id": req.StorageID,
+			"is_private": req.IsPrivate,
+			"error":      errStr,
+		}, &errStr)
+
 		switch {
 		case errors.Is(err, ErrImageAccountLocked):
 			_ = base.JSON(ctx, 423, "account is locked because usage exceeds plan limits", nil, nil)
@@ -72,6 +83,16 @@ func (c *Controller) CreateImage(ctx *gin.Context) {
 		}
 		return
 	}
+
+	var uidP *uuid.UUID
+	if !isGuest {
+		uidP = &userID
+	}
+	c.recordAudit("image.create", "success", uidP, strPtr("image"), &item.ID, ctx, map[string]any{
+		"image_id":   item.ID,
+		"storage_id": storageID,
+		"is_private": item.IsPrivate,
+	}, nil)
 
 	base.Success(ctx, toImageResponse(item), i18n.ImageCreated)
 }

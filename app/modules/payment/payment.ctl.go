@@ -1,13 +1,17 @@
 package payment
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
+	entitiesdto "pichost.io/app/modules/entities/dto"
 	"pichost.io/app/modules/entities/ent"
+	entitiesinf "pichost.io/app/modules/entities/inf"
 	"pichost.io/app/utils/base"
 	"pichost.io/config/i18n"
 
@@ -17,13 +21,56 @@ import (
 )
 
 type Controller struct {
-	tracer trace.Tracer
-	svc    *Service
+	tracer   trace.Tracer
+	svc      *Service
+	auditEnt entitiesinf.AuditEntity
 }
 
 func newController(tracer trace.Tracer, svc *Service) *Controller {
 	return &Controller{tracer: tracer, svc: svc}
 }
+
+func (c *Controller) recordAudit(
+	action string,
+	status string,
+	userID *uuid.UUID,
+	resourceType *string,
+	resourceID *uuid.UUID,
+	ctx *gin.Context,
+	meta map[string]any,
+	errCode *string,
+) {
+	if c.auditEnt == nil {
+		return
+	}
+	var ipPtr, uaPtr *string
+	if ctx != nil {
+		if ip := ctx.ClientIP(); ip != "" {
+			ipPtr = &ip
+		}
+		if ua := ctx.GetHeader("User-Agent"); ua != "" {
+			uaPtr = &ua
+		}
+	}
+	go func() {
+		reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = c.auditEnt.CreateAuditLog(reqCtx, entitiesdto.CreateAuditLog{
+			UserID:       userID,
+			Action:       action,
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			IPAddress:    ipPtr,
+			UserAgent:    uaPtr,
+			Metadata:     meta,
+			Status:       status,
+			ErrorCode:    errCode,
+		})
+	}()
+}
+
+func strPtr(s string) *string        { return &s }
+func uuidPtr(u uuid.UUID) *uuid.UUID { return &u }
 
 type checkoutRequest struct {
 	PlanKey  string `json:"plan_key" binding:"required"`
@@ -62,12 +109,23 @@ func (c *Controller) CreateCheckout(ctx *gin.Context) {
 		Provider: req.Provider,
 	})
 	if err != nil {
-		if errors.Is(err, ErrPaymentPlanUnavailable) {
+		errStr := err.Error()
+		c.recordAudit("billing.create_checkout", "failure", uuidPtr(authUserID), strPtr("plan"), nil, ctx, map[string]any{"plan_key": req.PlanKey, "provider": req.Provider, "error": errStr}, &errStr)
+		switch {
+		case errors.Is(err, ErrEmailVerificationRequired):
+			base.ValidateFailed(ctx, err.Error(), gin.H{"error": err.Error()})
+		case errors.Is(err, ErrPaymentPlanUnavailable):
 			base.BadRequest(ctx, err.Error(), nil)
-			return
+		default:
+			base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		}
-		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if result != nil {
+		c.recordAudit("billing.create_checkout", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(result.ID), ctx, map[string]any{"plan_key": req.PlanKey, "provider": req.Provider, "amount_thb": result.AmountTHB}, nil)
+	} else {
+		c.recordAudit("billing.create_checkout", "success", uuidPtr(authUserID), strPtr("plan"), nil, ctx, map[string]any{"plan_key": req.PlanKey, "provider": req.Provider}, nil)
 	}
 
 	base.Success(ctx, result)
@@ -189,6 +247,8 @@ func (c *Controller) ConfirmPaymentWebhook(ctx *gin.Context) {
 		Metadata:          req.Metadata,
 	})
 	if err != nil {
+		errStr := err.Error()
+		c.recordAudit("payment.webhook", "failure", nil, strPtr("payment"), req.PaymentID, ctx, map[string]any{"status": string(status), "error": errStr}, &errStr)
 		switch {
 		case errors.Is(err, ErrPaymentNotFound), errors.Is(err, ErrPaymentInvalidStatus), errors.Is(err, ErrPaymentInvalidAmount):
 			base.BadRequest(ctx, err.Error(), nil)
@@ -197,6 +257,12 @@ func (c *Controller) ConfirmPaymentWebhook(ctx *gin.Context) {
 		}
 		return
 	}
+
+	var pid *uuid.UUID
+	if updated != nil {
+		pid = &updated.ID
+	}
+	c.recordAudit("payment.webhook", "success", nil, strPtr("payment"), pid, ctx, map[string]any{"status": string(status), "is_plan_upgraded": upgraded}, nil)
 
 	base.Success(ctx, gin.H{
 		"payment":          updated,
@@ -236,6 +302,8 @@ func (c *Controller) SubmitSlip(ctx *gin.Context) {
 		StorageID: req.StorageID,
 	})
 	if err != nil {
+		errStr := err.Error()
+		c.recordAudit("billing.submit_slip", "failure", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"storage_id": req.StorageID, "error": errStr}, &errStr)
 		switch {
 		case errors.Is(err, ErrPaymentNotFound):
 			base.BadRequest(ctx, err.Error(), nil)
@@ -251,6 +319,7 @@ func (c *Controller) SubmitSlip(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("billing.submit_slip", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"storage_id": req.StorageID}, nil)
 	base.Success(ctx, result)
 }
 
@@ -295,6 +364,27 @@ func (c *Controller) AdminListPayments(ctx *gin.Context) {
 		Size:  int64(limit),
 		Total: int64(total),
 	})
+}
+
+// AdminGetPayment handles GET /admin/payments/:id
+func (c *Controller) AdminGetPayment(ctx *gin.Context) {
+	paymentID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	detail, err := c.svc.AdminGetPayment(ctx.Request.Context(), paymentID)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			base.BadRequest(ctx, err.Error(), nil)
+			return
+		}
+		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
+		return
+	}
+
+	base.Success(ctx, detail)
 }
 
 type adminConfirmRequest struct {
@@ -343,6 +433,8 @@ func (c *Controller) AdminConfirmPayment(ctx *gin.Context) {
 		Metadata:          req.Metadata,
 	})
 	if err != nil {
+		errStr := err.Error()
+		c.recordAudit("admin.payment.confirm", "failure", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"status": string(status), "error": errStr}, &errStr)
 		switch {
 		case errors.Is(err, ErrPaymentNotFound), errors.Is(err, ErrPaymentInvalidStatus), errors.Is(err, ErrPaymentInvalidAmount), errors.Is(err, ErrPaymentReviewReasonRequired):
 			base.BadRequest(ctx, err.Error(), nil)
@@ -351,6 +443,8 @@ func (c *Controller) AdminConfirmPayment(ctx *gin.Context) {
 		}
 		return
 	}
+
+	c.recordAudit("admin.payment.confirm", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"status": string(status), "is_plan_upgraded": upgraded}, nil)
 
 	base.Success(ctx, gin.H{
 		"payment":          updated,
@@ -393,6 +487,8 @@ func (c *Controller) AdminRefundPayment(ctx *gin.Context) {
 		ReviewedBy: &authUserID,
 	})
 	if err != nil {
+		errStr := err.Error()
+		c.recordAudit("admin.payment.refund", "failure", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"reason": req.Reason, "error": errStr}, &errStr)
 		switch {
 		case errors.Is(err, ErrPaymentNotFound), errors.Is(err, ErrPaymentNotPaidForRefund), errors.Is(err, ErrPaymentAlreadyRefunded):
 			base.BadRequest(ctx, err.Error(), nil)
@@ -401,6 +497,8 @@ func (c *Controller) AdminRefundPayment(ctx *gin.Context) {
 		}
 		return
 	}
+
+	c.recordAudit("admin.payment.refund", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"reason": req.Reason}, nil)
 
 	base.Success(ctx, updated)
 }
@@ -430,6 +528,8 @@ func (c *Controller) CancelSubscription(ctx *gin.Context) {
 		UseUntilMonth: req.UseUntilMonth,
 	})
 	if err != nil {
+		errStr := err.Error()
+		c.recordAudit("billing.cancel_subscription", "failure", uuidPtr(userID), strPtr("subscription"), nil, ctx, map[string]any{"use_until_month": req.UseUntilMonth, "error": errStr}, &errStr)
 		switch {
 		case errors.Is(err, ErrSubscriptionNotActive):
 			base.BadRequest(ctx, "No active paid subscription to cancel.", nil)
@@ -447,5 +547,6 @@ func (c *Controller) CancelSubscription(ctx *gin.Context) {
 		return
 	}
 	_ = user // updated successfully; client should re-fetch /auth/me for latest state
+	c.recordAudit("billing.cancel_subscription", "success", uuidPtr(userID), strPtr("subscription"), nil, ctx, map[string]any{"use_until_month": req.UseUntilMonth}, nil)
 	base.Success(ctx, nil, "Subscription cancelled successfully.")
 }

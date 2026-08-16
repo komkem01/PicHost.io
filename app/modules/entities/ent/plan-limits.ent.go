@@ -13,38 +13,38 @@ type PlanLimits struct {
 // GuestPlan is the "no account" tier.
 var GuestPlan = PlanLimits{
 	StorageBytes:   50 * 1024 * 1024, // 50 MB
-	FileSizeBytes:  5 * 1024 * 1024,  // 5 MB per file
+	FileSizeBytes:  50 * 1024 * 1024, // 50 MB per file
 	MaxImages:      10,
 	RetentionHours: 24,
 	AllowPrivate:   false,
-	AllowedMIMEs:   []string{"image/jpeg", "image/png"},
+	AllowedMIMEs:   []string{"image/jpeg", "image/png", "video/mp4", "video/quicktime", "video/mov", "video/x-quicktime"},
 }
 
 // planLimitsMap maps each PlanType to its limits.
 var planLimitsMap = map[PlanType]PlanLimits{
 	PlanTypeFree: {
 		StorageBytes:   500 * 1024 * 1024, // 500 MB
-		FileSizeBytes:  10 * 1024 * 1024,  // 10 MB per file
+		FileSizeBytes:  100 * 1024 * 1024, // 100 MB per file
 		MaxImages:      200,
 		RetentionHours: 0,
 		AllowPrivate:   false,
-		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp"},
+		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime", "video/mov", "video/x-quicktime", "video/m4v"},
 	},
 	PlanTypeBasic: {
 		StorageBytes:   10 * 1024 * 1024 * 1024, // 10 GB
-		FileSizeBytes:  20 * 1024 * 1024,        // 20 MB per file
+		FileSizeBytes:  500 * 1024 * 1024,       // 500 MB per file
 		MaxImages:      0,
 		RetentionHours: 0,
 		AllowPrivate:   true,
-		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"},
+		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "video/mp4", "video/webm", "video/quicktime", "video/mov", "video/x-quicktime", "video/m4v", "video/x-msvideo", "video/mkv"},
 	},
 	PlanTypePro: {
 		StorageBytes:   100 * 1024 * 1024 * 1024, // 100 GB
-		FileSizeBytes:  50 * 1024 * 1024,         // 50 MB per file
+		FileSizeBytes:  2 * 1024 * 1024 * 1024,   // 2 GB per file
 		MaxImages:      0,
 		RetentionHours: 0,
 		AllowPrivate:   true,
-		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/bmp", "image/tiff", "image/heic", "image/heif"},
+		AllowedMIMEs:   []string{"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/bmp", "image/tiff", "image/heic", "image/heif", "video/mp4", "video/webm", "video/quicktime", "video/mov", "video/x-quicktime", "video/m4v", "video/x-msvideo", "video/avi", "video/mkv"},
 	},
 	PlanTypeEnterprise: {
 		StorageBytes:   -1, // unlimited

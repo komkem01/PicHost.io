@@ -38,3 +38,8 @@ func New(
 		Ctl:    newController(tracer, svc),
 	}
 }
+
+func (m *Module) SetAuditEntity(auditEnt entitiesinf.AuditEntity) {
+	m.Ctl.auditEnt = auditEnt
+}
+

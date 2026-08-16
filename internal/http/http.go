@@ -80,6 +80,7 @@ func serve(mod *modules.Modules) *http.Server {
 			e.UseH2C = true
 			e.RemoveExtraSlash = true
 		})
+	app.MaxMultipartMemory = 500 << 20
 
 	if conf.Debug {
 		app.Use(gin.LoggerWithConfig(gin.LoggerConfig{

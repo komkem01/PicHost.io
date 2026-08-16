@@ -20,6 +20,7 @@ import (
 )
 
 func (s *Service) GetImage(ctx context.Context, id uuid.UUID) (*ent.ImageEntity, error) {
+	_ = s.image.IncrementImageViewCount(ctx, id)
 	item, err := s.image.GetImageByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

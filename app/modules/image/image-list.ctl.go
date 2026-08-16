@@ -26,7 +26,8 @@ type ImageWithStorageResponse struct {
 	Provider  string  `json:"provider"`
 	FileSize  int64   `json:"file_size"`
 	MIMEType  *string `json:"mime_type"`
-	PublicURL string  `json:"public_url"`
+	PublicURL string  `json:"public_url"` 
+	ViewsCount int64   `json:"views_count"`
 }
 
 func (c *Controller) ListImages(ctx *gin.Context) {
@@ -76,6 +77,7 @@ func toImageWithStorageResponse(ctx *gin.Context, img *ent.ImageEntity, s *ent.S
 		FileSize:  s.FileSize,
 		MIMEType:  s.MIMEType,
 		PublicURL: buildListPublicURL(ctx, img.ID.String(), s.ShortCode),
+		ViewsCount: img.ViewCount,
 	}
 }
 

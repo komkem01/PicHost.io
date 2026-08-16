@@ -149,3 +149,98 @@ func (s *Service) DeleteStorage(ctx context.Context, id uuid.UUID) error {
 		Exec(ctx)
 	return err
 }
+
+func (s *Service) GetStorageStats(ctx context.Context) (*entitiesdto.StorageStats, error) {
+	stats := &entitiesdto.StorageStats{
+		ProviderBreakdown: make(map[string]int64),
+	}
+
+	// Total files and bytes
+	var totalRow struct {
+		TotalFiles int64 `bun:"total_files"`
+		TotalBytes int64 `bun:"total_bytes"`
+	}
+	_ = s.db.NewSelect().
+		Model((*ent.StorageEntity)(nil)).
+		ColumnExpr("COUNT(*) as total_files, COALESCE(SUM(file_size), 0) as total_bytes").
+		Scan(ctx, &totalRow)
+	stats.TotalFiles = totalRow.TotalFiles
+	stats.TotalBytes = totalRow.TotalBytes
+
+	// Orphan files and bytes
+	var orphanRow struct {
+		OrphanFiles int64 `bun:"orphan_files"`
+		OrphanBytes int64 `bun:"orphan_bytes"`
+	}
+	_ = s.db.NewSelect().
+		TableExpr("storages AS s").
+		ColumnExpr("COUNT(s.id) as orphan_files, COALESCE(SUM(s.file_size), 0) as orphan_bytes").
+		Join("LEFT JOIN images AS i ON s.id = i.storage_id").
+		Join("LEFT JOIN payment_transactions AS pt ON s.id::text = pt.slip_storage_id").
+		Where("i.id IS NULL AND pt.id IS NULL").
+		Scan(ctx, &orphanRow)
+	stats.OrphanFiles = orphanRow.OrphanFiles
+	stats.OrphanBytes = orphanRow.OrphanBytes
+
+	// Provider breakdown
+	var providerRows []struct {
+		Provider   string `bun:"provider"`
+		TotalBytes int64  `bun:"total_bytes"`
+	}
+	_ = s.db.NewSelect().
+		Model((*ent.StorageEntity)(nil)).
+		ColumnExpr("provider, COALESCE(SUM(file_size), 0) as total_bytes").
+		Group("provider").
+		Scan(ctx, &providerRows)
+	for _, row := range providerRows {
+		stats.ProviderBreakdown[row.Provider] = row.TotalBytes
+	}
+
+	return stats, nil
+}
+
+func (s *Service) ListOrphanedStorage(ctx context.Context, limit int, offset int) ([]*ent.StorageEntity, int, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var storages []*ent.StorageEntity
+	count, err := s.db.NewSelect().
+		TableExpr("storages AS s").
+		ColumnExpr("s.*").
+		Join("LEFT JOIN images AS i ON s.id = i.storage_id").
+		Join("LEFT JOIN payment_transactions AS pt ON s.id::text = pt.slip_storage_id").
+		Where("i.id IS NULL AND pt.id IS NULL").
+		Order("s.created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		ScanAndCount(ctx, &storages)
+	if err != nil {
+		return nil, 0, err
+	}
+	return storages, count, nil
+}
+
+func (s *Service) CleanupOrphanedStorage(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	q := s.db.NewDelete().
+		TableExpr("storages AS s").
+		Where("s.id NOT IN (SELECT storage_id FROM images WHERE storage_id IS NOT NULL)").
+		Where("s.id::text NOT IN (SELECT slip_storage_id FROM payment_transactions WHERE slip_storage_id IS NOT NULL)")
+
+	if len(ids) > 0 {
+		q = q.Where("s.id IN (?)", ids)
+	}
+
+	res, err := q.Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+

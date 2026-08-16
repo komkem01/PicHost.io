@@ -93,3 +93,16 @@ func (s *Service) ListAuditLogs(ctx context.Context, filter entitiesdto.ListAudi
 	return logs, count, nil
 }
 
+func (s *Service) DeleteAuditLogsOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	res, err := s.db.NewDelete().
+		Model((*ent.AuditLogEntity)(nil)).
+		Where("created_at < ?", cutoff).
+		Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+

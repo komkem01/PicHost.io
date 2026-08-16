@@ -29,3 +29,12 @@ type StorageResponse struct {
 	MIMEType  *string `json:"mime_type"`
 	CreatedAt string  `json:"created_at"`
 }
+
+type StorageStats struct {
+	TotalFiles        int64            `json:"total_files"`
+	TotalBytes        int64            `json:"total_bytes"`
+	OrphanFiles       int64            `json:"orphan_files"`
+	OrphanBytes       int64            `json:"orphan_bytes"`
+	ProviderBreakdown map[string]int64 `json:"provider_breakdown"`
+}
+

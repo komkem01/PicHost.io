@@ -10,6 +10,7 @@ import (
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	"pichost.io/app/modules/entities/ent"
 	entitiesinf "pichost.io/app/modules/entities/inf"
+	"pichost.io/app/utils/hashing"
 
 	"github.com/google/uuid"
 )
@@ -26,6 +27,8 @@ type Service struct {
 	payment  entitiesinf.PaymentTransactionEntity
 	auth     entitiesinf.AuthEntity
 	storage  entitiesinf.StorageEntity
+	legal    entitiesinf.LegalDocumentEntity
+	notif    entitiesinf.NotificationEntity
 }
 
 func newService(
@@ -36,6 +39,8 @@ func newService(
 	payment entitiesinf.PaymentTransactionEntity,
 	auth entitiesinf.AuthEntity,
 	storage entitiesinf.StorageEntity,
+	legal entitiesinf.LegalDocumentEntity,
+	notif entitiesinf.NotificationEntity,
 ) *Service {
 	return &Service{
 		user:     user,
@@ -45,6 +50,8 @@ func newService(
 		payment:  payment,
 		auth:     auth,
 		storage:  storage,
+		legal:    legal,
+		notif:    notif,
 	}
 }
 
@@ -216,14 +223,17 @@ func (s *Service) GetDashboardStats(ctx context.Context) (*DashboardStats, error
 // --- User management ---
 
 type AdminUser struct {
-	ID        uuid.UUID `json:"id"`
-	Email     *string   `json:"email"`
-	Username  *string   `json:"username"`
-	Plan      string    `json:"plan"`
-	IsActive  bool      `json:"is_active"`
-	IsGuest   bool      `json:"is_guest"`
-	IsAdmin   bool      `json:"is_admin"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID  `json:"id"`
+	Email     *string    `json:"email"`
+	Username  *string    `json:"username"`
+	Plan      string     `json:"plan"`
+	IsActive  bool       `json:"is_active"`
+	IsGuest   bool       `json:"is_guest"`
+	IsAdmin   bool       `json:"is_admin"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	LoginCount  int        `json:"login_count"`
+	LastLoginIP *string    `json:"last_login_ip,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 
 	// Quota — populated when requested
 	UsedStorageBytes *int64 `json:"used_storage_bytes,omitempty"`
@@ -232,14 +242,17 @@ type AdminUser struct {
 
 func toAdminUser(u *ent.UserEntity) AdminUser {
 	return AdminUser{
-		ID:        u.ID,
-		Email:     u.Email,
-		Username:  u.Username,
-		Plan:      string(u.Plan),
-		IsActive:  u.IsActive,
-		IsGuest:   u.IsGuest,
-		IsAdmin:   u.IsAdmin,
-		CreatedAt: u.CreatedAt,
+		ID:          u.ID,
+		Email:       u.Email,
+		Username:    u.Username,
+		Plan:        string(u.Plan),
+		IsActive:    u.IsActive,
+		IsGuest:     u.IsGuest,
+		IsAdmin:     u.IsAdmin,
+		LastLoginAt: u.LastLoginAt,
+		LoginCount:  u.LoginCount,
+		LastLoginIP: u.LastLoginIP,
+		CreatedAt:   u.CreatedAt,
 	}
 }
 
@@ -346,7 +359,7 @@ func (s *Service) ListAllImages(ctx context.Context, limit int, offset int) ([]*
 	return s.image.ListAllImages(ctx, limit, offset)
 }
 
-func (s *Service) DeleteImageByAdmin(ctx context.Context, imageID uuid.UUID) error {
+func (s *Service) DeleteImageByAdmin(ctx context.Context, imageID uuid.UUID, reason string) error {
 	img, err := s.image.GetImageByID(ctx, imageID)
 	if err != nil {
 		return err
@@ -365,9 +378,124 @@ func (s *Service) DeleteImageByAdmin(ctx context.Context, imageID uuid.UUID) err
 			StorageDelta:    -fileSize,
 			ImageCountDelta: -1,
 		})
+
+		// Send in-app notification to the image owner with the deletion reason
+		if s.notif != nil {
+			cleanReason := strings.TrimSpace(reason)
+			if cleanReason == "" {
+				cleanReason = "ละเมิดข้อกำหนดการใช้งานหรือนโยบายระบบ"
+			}
+
+			idSnippet := imageID.String()
+			if len(idSnippet) > 8 {
+				idSnippet = idSnippet[:8]
+			}
+
+			title := "รูปภาพของคุณถูกลบโดยผู้ดูแลระบบ"
+			msg := "รูปภาพ (ID: " + idSnippet + "...) ถูกลบออกจากระบบเนื่องจาก: " + cleanReason
+			link := "/dashboard"
+
+			_, _ = s.notif.CreateNotification(ctx, entitiesdto.CreateNotification{
+				UserID:     img.UserID,
+				TargetRole: "user",
+				Type:       "moderation",
+				Title:      title,
+				Message:    msg,
+				Link:       &link,
+			})
+		}
 	}
 
 	return s.image.DeleteImage(ctx, imageID)
 }
+
+// --- Legal Documents ---
+
+func (s *Service) ListLegalDocuments(ctx context.Context) ([]*ent.LegalDocumentEntity, error) {
+	if s.legal == nil {
+		return []*ent.LegalDocumentEntity{}, nil
+	}
+	return s.legal.ListLegalDocuments(ctx)
+}
+
+func (s *Service) GetLegalDocumentByKey(ctx context.Context, key string) (*ent.LegalDocumentEntity, error) {
+	if s.legal == nil {
+		return nil, errors.New("legal entity service not available")
+	}
+	return s.legal.GetLegalDocumentByKey(ctx, key)
+}
+
+func (s *Service) UpsertLegalDocument(ctx context.Context, input entitiesdto.UpsertLegalDocument) (*ent.LegalDocumentEntity, error) {
+	if s.legal == nil {
+		return nil, errors.New("legal entity service not available")
+	}
+	return s.legal.UpsertLegalDocument(ctx, input)
+}
+
+func (s *Service) DeleteLegalDocumentByKey(ctx context.Context, key string) error {
+	if s.legal == nil {
+		return errors.New("legal entity service not available")
+	}
+	return s.legal.DeleteLegalDocumentByKey(ctx, key)
+}
+
+func (s *Service) ResetUserPassword(ctx context.Context, id uuid.UUID, newPassword string) error {
+	if len(strings.TrimSpace(newPassword)) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	hash, err := hashing.HashPasswordArgon2(newPassword, hashing.DefaultArgon2Params())
+	if err != nil {
+		return err
+	}
+
+	_, err = s.user.UpdateUserPassword(ctx, id, entitiesdto.UpdateUserPassword{
+		NewPassword: hash,
+	})
+	if err != nil {
+		return err
+	}
+
+	if s.auth != nil {
+		_ = s.auth.RevokeAuthSessionsByUserID(ctx, id)
+	}
+
+	return nil
+}
+
+func (s *Service) BulkDeleteImagesByAdmin(ctx context.Context, imageIDs []uuid.UUID, reason string) (int, error) {
+	deletedCount := 0
+	for _, id := range imageIDs {
+		if err := s.DeleteImageByAdmin(ctx, id, reason); err == nil {
+			deletedCount++
+		}
+	}
+	return deletedCount, nil
+}
+
+// --- Storage Management ---
+
+func (s *Service) GetStorageStats(ctx context.Context) (*entitiesdto.StorageStats, error) {
+	if s.storage == nil {
+		return nil, errors.New("storage service not available")
+	}
+	return s.storage.GetStorageStats(ctx)
+}
+
+func (s *Service) ListOrphanedStorage(ctx context.Context, limit int, offset int) ([]*ent.StorageEntity, int, error) {
+	if s.storage == nil {
+		return nil, 0, errors.New("storage service not available")
+	}
+	return s.storage.ListOrphanedStorage(ctx, limit, offset)
+}
+
+func (s *Service) CleanupOrphanedStorage(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	if s.storage == nil {
+		return 0, errors.New("storage service not available")
+	}
+	return s.storage.CleanupOrphanedStorage(ctx, ids)
+}
+
+
 
 

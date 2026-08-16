@@ -179,7 +179,8 @@ func (s *Service) ListAllImages(ctx context.Context, limit int, offset int) ([]*
 	count, err := s.db.NewSelect().
 		Model(&images).
 		Relation("Storage").
-		Order("created_at DESC").
+		Relation("User").
+		OrderExpr("i.created_at DESC").
 		Limit(limit).
 		Offset(offset).
 		ScanAndCount(ctx)
@@ -219,3 +220,23 @@ func (s *Service) GetUniqueGuestIPCount(ctx context.Context, since time.Time) (i
 }
 
 
+
+
+func (s *Service) IncrementImageViewCount(ctx context.Context, id uuid.UUID) error {
+	_, err := s.db.NewUpdate().
+		Model((*ent.ImageEntity)(nil)).
+		Set("view_count = view_count + 1").
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+func (s *Service) GetTotalImageViewsByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	var total int64
+	err := s.db.NewSelect().
+		Model((*ent.ImageEntity)(nil)).
+		ColumnExpr("COALESCE(SUM(view_count), 0)").
+		Where("user_id = ?", userID).
+		Scan(ctx, &total)
+	return total, err
+}

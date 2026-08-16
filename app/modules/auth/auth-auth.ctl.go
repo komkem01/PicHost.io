@@ -369,7 +369,14 @@ func (c *Controller) ForgotPassword(ctx *gin.Context) {
 		return
 	}
 
-	_ = c.svc.ForgotPassword(ctx.Request.Context(), req.Email)
+	err := c.svc.ForgotPassword(ctx.Request.Context(), req.Email)
+	if err != nil {
+		errStr := err.Error()
+		c.recordAudit("auth.forgot_password", "failure", nil, strPtr("user"), nil, ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"email": req.Email, "error": errStr}, &errStr)
+	} else {
+		c.recordAudit("auth.forgot_password", "success", nil, strPtr("user"), nil, ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"email": req.Email}, nil)
+	}
+
 	base.Success(ctx, gin.H{"message": "If that email is registered, a password reset link has been sent."})
 }
 
@@ -381,6 +388,8 @@ func (c *Controller) ResetPassword(ctx *gin.Context) {
 	}
 
 	if err := c.svc.ResetPassword(ctx.Request.Context(), req.Token, req.NewPassword); err != nil {
+		errStr := err.Error()
+		c.recordAudit("auth.reset_password", "failure", nil, strPtr("user"), nil, ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"error": errStr}, &errStr)
 		if errors.Is(err, ErrInvalidOrExpiredToken) {
 			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
 			return
@@ -389,6 +398,7 @@ func (c *Controller) ResetPassword(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("auth.reset_password", "success", nil, strPtr("user"), nil, ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
 	base.Success(ctx, gin.H{"message": "Password reset successfully. Please log in with your new password."})
 }
 
@@ -400,6 +410,8 @@ func (c *Controller) VerifyEmail(ctx *gin.Context) {
 	}
 
 	if err := c.svc.VerifyEmail(ctx.Request.Context(), req.Token); err != nil {
+		errStr := err.Error()
+		c.recordAudit("auth.verify_email", "failure", nil, strPtr("user"), nil, ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"error": errStr}, &errStr)
 		if errors.Is(err, ErrInvalidOrExpiredToken) {
 			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
 			return
@@ -408,6 +420,7 @@ func (c *Controller) VerifyEmail(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("auth.verify_email", "success", nil, strPtr("user"), nil, ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
 	base.Success(ctx, gin.H{"message": "Email verified successfully."})
 }
 
@@ -425,6 +438,8 @@ func (c *Controller) ResendVerification(ctx *gin.Context) {
 	}
 
 	if err := c.svc.ResendVerificationEmail(ctx.Request.Context(), userID); err != nil {
+		errStr := err.Error()
+		c.recordAudit("auth.resend_verification", "failure", uuidPtr(userID), strPtr("user"), uuidPtr(userID), ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"error": errStr}, &errStr)
 		if errors.Is(err, ErrEmailAlreadyVerified) {
 			base.BadRequest(ctx, i18n.BadRequest, gin.H{"error": err.Error()})
 			return
@@ -433,6 +448,7 @@ func (c *Controller) ResendVerification(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("auth.resend_verification", "success", uuidPtr(userID), strPtr("user"), uuidPtr(userID), ctx.ClientIP(), ctx.GetHeader("User-Agent"), nil, nil)
 	base.Success(ctx, gin.H{"message": "Verification email resent successfully."})
 }
 

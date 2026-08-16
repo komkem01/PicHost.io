@@ -1,10 +1,20 @@
 package image
 
-import "go.opentelemetry.io/otel/trace"
+import (
+	"context"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
+	entitiesdto "pichost.io/app/modules/entities/dto"
+	entitiesinf "pichost.io/app/modules/entities/inf"
+)
 
 type Controller struct {
-	tracer trace.Tracer
-	svc    *Service
+	tracer   trace.Tracer
+	svc      *Service
+	auditEnt entitiesinf.AuditEntity
 }
 
 func newController(trace trace.Tracer, svc *Service) *Controller {
@@ -13,3 +23,46 @@ func newController(trace trace.Tracer, svc *Service) *Controller {
 		svc:    svc,
 	}
 }
+
+func (c *Controller) recordAudit(
+	action string,
+	status string,
+	userID *uuid.UUID,
+	resourceType *string,
+	resourceID *uuid.UUID,
+	ctx *gin.Context,
+	meta map[string]any,
+	errCode *string,
+) {
+	if c.auditEnt == nil {
+		return
+	}
+	var ipPtr, uaPtr *string
+	if ctx != nil {
+		if ip := ctx.ClientIP(); ip != "" {
+			ipPtr = &ip
+		}
+		if ua := ctx.GetHeader("User-Agent"); ua != "" {
+			uaPtr = &ua
+		}
+	}
+	go func() {
+		reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = c.auditEnt.CreateAuditLog(reqCtx, entitiesdto.CreateAuditLog{
+			UserID:       userID,
+			Action:       action,
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			IPAddress:    ipPtr,
+			UserAgent:    uaPtr,
+			Metadata:     meta,
+			Status:       status,
+			ErrorCode:    errCode,
+		})
+	}()
+}
+
+func strPtr(s string) *string        { return &s }
+func uuidPtr(u uuid.UUID) *uuid.UUID { return &u }
+

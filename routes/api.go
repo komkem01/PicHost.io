@@ -18,7 +18,7 @@ func WarpH(router *gin.RouterGroup, prefix string, handler http.Handler) {
 func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 	storagePublic := r.Group("/storage")
 	{
-		storagePublic.POST("/upload-file-guest", ratelimit.New(nil, "guest_upload", 5, time.Minute, ratelimit.IPKeyFunc), mod.Storage.Ctl.UploadFileGuest)
+		storagePublic.POST("/upload-file-guest", ratelimit.New(nil, "guest_upload", 60, time.Minute, ratelimit.IPKeyFunc), mod.Storage.Ctl.UploadFileGuest)
 	}
 
 	storageOptAuth := r.Group("/storage")
@@ -31,8 +31,8 @@ func apiStorage(r *gin.RouterGroup, mod *modules.Modules) {
 	storageAuth := r.Group("/storage")
 	storageAuth.Use(mod.Auth.Ctl.AuthMiddleware())
 	{
-		storageAuth.POST("/upload", ratelimit.New(nil, "upload", 20, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.Upload)
-		storageAuth.POST("/upload-file", ratelimit.New(nil, "upload_file", 20, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.UploadFile)
+		storageAuth.POST("/upload", ratelimit.New(nil, "upload", 200, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.Upload)
+		storageAuth.POST("/upload-file", ratelimit.New(nil, "upload_file", 200, time.Minute, ratelimit.UserOrIPKeyFunc), mod.Storage.Ctl.UploadFile)
 		storageAuth.GET("/files", mod.Storage.Ctl.ListFiles)
 		storageAuth.DELETE("/files/:id", mod.Storage.Ctl.DeleteFile)
 	}
@@ -51,6 +51,7 @@ func apiImage(r *gin.RouterGroup, mod *modules.Modules) {
 	imageAuth.Use(mod.Auth.Ctl.AuthMiddleware())
 	{
 		imageAuth.GET("", mod.Image.Ctl.ListImages)
+		imageAuth.DELETE("/:id", mod.Storage.Ctl.DeleteFile)
 	}
 }
 
@@ -58,6 +59,8 @@ func apiPublic(r *gin.RouterGroup, mod *modules.Modules) {
 	public := r.Group("/public")
 	{
 		public.GET("/plans", mod.Admin.Ctl.ListPublicPlanSettings)
+		public.GET("/legal", mod.Admin.Ctl.ListPublicLegalDocuments)
+		public.GET("/legal/:key", mod.Admin.Ctl.GetPublicLegalDocument)
 		public.POST("/payments/webhook", mod.Payment.Ctl.ConfirmPaymentWebhook)
 
 		auth := public.Group("/auth")
@@ -110,8 +113,16 @@ func apiAdmin(r *gin.RouterGroup, mod *modules.Modules) {
 		{
 			images.GET("", mod.Admin.Ctl.ListImages)
 			images.DELETE("/:id", mod.Admin.Ctl.DeleteImage)
+			images.POST("/bulk-delete", mod.Admin.Ctl.BulkDeleteImages)
 		}
 
+		legal := adminGrp.Group("/legal")
+		{
+			legal.GET("", mod.Admin.Ctl.ListLegalDocuments)
+			legal.GET("/:key", mod.Admin.Ctl.GetLegalDocument)
+			legal.PUT("/:key", mod.Admin.Ctl.UpsertLegalDocument)
+			legal.DELETE("/:key", mod.Admin.Ctl.DeleteLegalDocument)
+		}
 
 		plans := adminGrp.Group("/plans")
 		{
@@ -129,14 +140,42 @@ func apiAdmin(r *gin.RouterGroup, mod *modules.Modules) {
 			users.PATCH("/:id/plan", mod.Admin.Ctl.SetUserPlan)
 			users.PATCH("/:id/active", mod.Admin.Ctl.SetUserActive)
 			users.PATCH("/:id/admin", mod.Admin.Ctl.SetUserAdmin)
+			users.POST("/:id/reset-password", mod.Admin.Ctl.ResetUserPassword)
 			users.DELETE("/:id", mod.Admin.Ctl.DeleteUser)
 		}
 
 		payments := adminGrp.Group("/payments")
 		{
 			payments.GET("", mod.Payment.Ctl.AdminListPayments)
+			payments.GET("/:id", mod.Payment.Ctl.AdminGetPayment)
 			payments.PATCH("/:id/confirm", mod.Payment.Ctl.AdminConfirmPayment)
 			payments.PATCH("/:id/refund", mod.Payment.Ctl.AdminRefundPayment)
 		}
+
+		storage := adminGrp.Group("/storage")
+		{
+			storage.GET("/stats", mod.Admin.Ctl.GetStorageStats)
+			storage.GET("/orphaned", mod.Admin.Ctl.ListOrphanedStorage)
+			storage.POST("/cleanup", mod.Admin.Ctl.CleanupOrphanedStorage)
+		}
+
+		notifications := adminGrp.Group("/notifications")
+		{
+			notifications.GET("", mod.Notification.Ctl.AdminListNotifications)
+			notifications.POST("/broadcast", mod.Notification.Ctl.AdminBroadcast)
+			notifications.DELETE("/:id", mod.Notification.Ctl.DeleteNotification)
+		}
+	}
+}
+
+func apiNotifications(r *gin.RouterGroup, mod *modules.Modules) {
+	notif := r.Group("/notifications")
+	notif.Use(mod.Auth.Ctl.AuthMiddleware())
+	{
+		notif.GET("", mod.Notification.Ctl.ListMyNotifications)
+		notif.GET("/unread-count", mod.Notification.Ctl.GetMyUnreadCount)
+		notif.PATCH("/:id/read", mod.Notification.Ctl.MarkAsRead)
+		notif.POST("/read-all", mod.Notification.Ctl.MarkAllAsRead)
+		notif.DELETE("/:id", mod.Notification.Ctl.DeleteNotification)
 	}
 }

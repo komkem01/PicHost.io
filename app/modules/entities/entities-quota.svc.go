@@ -56,8 +56,8 @@ func (s *Service) AddToUserQuota(ctx context.Context, userID uuid.UUID, delta en
 	var quota ent.UserQuotaEntity
 	_, err := s.db.NewUpdate().
 		Model(&quota).
-		Set("used_storage_bytes = used_storage_bytes + ?", delta.StorageDelta).
-		Set("image_count = image_count + ?", delta.ImageCountDelta).
+		Set("used_storage_bytes = CASE WHEN used_storage_bytes + ? < 0 THEN 0 ELSE used_storage_bytes + ? END", delta.StorageDelta, delta.StorageDelta).
+		Set("image_count = CASE WHEN image_count + ? < 0 THEN 0 ELSE image_count + ? END", delta.ImageCountDelta, delta.ImageCountDelta).
 		Set("updated_at = ?", time.Now()).
 		Where("user_id = ?", userID).
 		Returning("*").
