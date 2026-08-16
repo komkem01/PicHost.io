@@ -2,6 +2,7 @@ package entities
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	entitiesdto "pichost.io/app/modules/entities/dto"
@@ -13,10 +14,21 @@ import (
 
 var _ entitiesinf.UserEntity = (*Service)(nil)
 
+// normalizeEmailForStorage lowercases and trims an email before it is stored
+// or used in a uniqueness lookup, so "User@Example.com" and "user@example.com"
+// are always treated as the same address.
+func normalizeEmailForStorage(email *string) *string {
+	if email == nil {
+		return nil
+	}
+	v := strings.ToLower(strings.TrimSpace(*email))
+	return &v
+}
+
 func (s *Service) CreateUser(ctx context.Context, user entitiesdto.CreateUser) (*ent.UserEntity, error) {
 	now := time.Now()
 	data := &ent.UserEntity{
-		Email:     user.Email,
+		Email:     normalizeEmailForStorage(user.Email),
 		Password:  user.Password,
 		Username:  user.Username,
 		Plan:      ent.PlanType(user.Plan),
@@ -59,11 +71,15 @@ func (s *Service) GetListUser(ctx context.Context) ([]*ent.UserEntity, error) {
 	return users, nil
 }
 
+// GetUserByEmail looks the user up case-insensitively (LOWER(email) = LOWER(?))
+// so a differently-cased variant of an already-registered address (e.g. legacy
+// rows stored before normalization, or a client that didn't lowercase) is
+// still recognized as a conflict/match instead of silently missing.
 func (s *Service) GetUserByEmail(ctx context.Context, email string) (*ent.UserEntity, error) {
 	var user ent.UserEntity
 	err := s.db.NewSelect().
 		Model(&user).
-		Where("email = ?", email).
+		Where("LOWER(email) = LOWER(?)", strings.TrimSpace(email)).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -71,24 +87,45 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*ent.UserEn
 	return &user, nil
 }
 
+// UpdateUser updates only username/email/is_active/plan/is_guest (and,
+// optionally, email_verified_at — see ClearEmailVerification). It uses an
+// explicit column allowlist (matching CreateUser/UpdateUserPassword) so callers
+// that only intend to change one or two of these fields never clobber unrelated
+// columns such as admin state, email verification, login metadata, or plan
+// expiry with their zero values.
+//
+// When user.ClearEmailVerification is set, email_verified_at is reset to NULL
+// in the same UPDATE statement as the email change, so a new (unverified)
+// address is never observable in the DB together with a stale, still-set
+// email_verified_at from the previous address.
 func (s *Service) UpdateUser(ctx context.Context, id uuid.UUID, user entitiesdto.UpdateUser) (*ent.UserEntity, error) {
 	now := time.Now()
 	data := &ent.UserEntity{
-		Email:     user.Email,
+		Email:     normalizeEmailForStorage(user.Email),
 		Username:  user.Username,
 		IsActive:  *user.IsActive,
 		Plan:      ent.PlanType(*user.Plan),
 		IsGuest:   *user.IsGuest,
 		UpdatedAt: now,
+		// EmailVerifiedAt is left at its zero value (nil) intentionally: it is
+		// only included in the column list below when the caller explicitly asks
+		// to clear it, so it's otherwise left untouched.
 	}
+
+	columns := []string{"email", "username", "is_active", "plan", "is_guest", "updated_at"}
+	if user.ClearEmailVerification {
+		columns = append(columns, "email_verified_at")
+	}
+
 	_, err := s.db.NewUpdate().
 		Model(data).
+		Column(columns...).
 		Where("id = ?", id).
 		Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	return s.GetUserByID(ctx, id)
 }
 
 func (s *Service) UpdateUserPlan(ctx context.Context, id uuid.UUID, plan entitiesdto.UpdateUserPlan) (*ent.UserEntity, error) {
@@ -226,6 +263,23 @@ func (s *Service) SetUserEmailVerified(ctx context.Context, id uuid.UUID) (*ent.
 	return s.GetUserByID(ctx, id)
 }
 
+// ClearUserEmailVerified resets email_verified_at to NULL on its own, without
+// touching any other column. Note: UpdateMe's email-change path does NOT use
+// this — it clears verification atomically with the email change itself via
+// UpdateUser's ClearEmailVerification flag, to avoid a window where the new
+// address is stored with a stale, still-set email_verified_at. This standalone
+// method remains available as a general-purpose primitive for callers that
+// need to invalidate verification independent of an email change.
+func (s *Service) ClearUserEmailVerified(ctx context.Context, id uuid.UUID) error {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("email_verified_at = NULL, updated_at = ?", now).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
 func (s *Service) CreatePasswordResetToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*ent.PasswordResetTokenEntity, error) {
 	data := &ent.PasswordResetTokenEntity{
 		UserID:    userID,
@@ -315,5 +369,3 @@ func (s *Service) RecordUserLogin(ctx context.Context, id uuid.UUID, ip *string)
 		Exec(ctx)
 	return err
 }
-
-

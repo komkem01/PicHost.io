@@ -42,6 +42,10 @@ func (c *Controller) UpdateMe(ctx *gin.Context) {
 			base.Unauthorized(ctx, i18n.Unauthorized, nil)
 			return
 		}
+		if errors.Is(err, ErrUserEmailAlreadyExists) {
+			base.BadRequest(ctx, err.Error(), gin.H{"error": "email_already_exists"})
+			return
+		}
 		base.InternalServerError(ctx, i18n.InternalError, gin.H{"error": err.Error()})
 		return
 	}

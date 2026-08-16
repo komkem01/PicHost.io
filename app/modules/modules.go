@@ -74,6 +74,7 @@ func modulesInit() {
 	paymentMod := payment.New(config.Conf[payment.Config](confMod.Svc), entitiesMod.Svc, entitiesMod.Svc, entitiesMod.Svc)
 	paymentMod.SetMailer(mailerMod.Svc)
 	paymentMod.SetNotificationEntity(entitiesMod.Svc)
+	authMod.SetEntitlementActivator(paymentMod.Svc)
 
 	notificationMod := notification.New(config.Conf[notification.Config](confMod.Svc), entitiesMod.Svc)
 
@@ -105,7 +106,6 @@ func modulesInit() {
 		Audit:        auditMod,
 		Notification: notificationMod,
 	}
-
 
 	log.Infof("all modules initialized")
 }

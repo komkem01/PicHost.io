@@ -83,12 +83,9 @@ type CreateCheckoutInput struct {
 }
 
 func (s *Service) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*ent.PaymentTransactionEntity, error) {
-	user, err := s.userEnt.GetUserByID(ctx, in.UserID)
+	_, err := s.userEnt.GetUserByID(ctx, in.UserID)
 	if err != nil {
 		return nil, err
-	}
-	if user.Email != nil && user.EmailVerifiedAt == nil {
-		return nil, ErrEmailVerificationRequired
 	}
 
 	planKey := normalizePlanKey(in.PlanKey)
@@ -115,7 +112,13 @@ func (s *Service) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*
 		provider = string(ProviderManual)
 	}
 
-	row, err := s.paymentEnt.CreatePaymentTransaction(ctx, entitiesdto.CreatePaymentTransaction{
+	// An unverified user is allowed to pay; the entitlement is held until email
+	// verification (see ConfirmPayment / ActivatePendingEntitlements). Only one
+	// open checkout is allowed at a time so a user can't stack duplicate charges.
+	// The check-then-insert is done atomically in the entities layer (locking the
+	// user row, then any open transaction, in one DB transaction) so concurrent
+	// checkout calls for the same user serialize instead of racing.
+	row, err := s.paymentEnt.CreatePaymentTransactionIfNoOpen(ctx, in.UserID, entitiesdto.CreatePaymentTransaction{
 		UserID:            in.UserID,
 		PlanKey:           planKey,
 		AmountTHB:         plan.MonthlyPriceTHB,
@@ -130,6 +133,10 @@ func (s *Service) CreateCheckout(ctx context.Context, in CreateCheckoutInput) (*
 		},
 	})
 	if err != nil {
+		var openErr *entitiesdto.ErrOpenPaymentTransactionExists
+		if errors.As(err, &openErr) {
+			return nil, &ErrPaymentOpenExists{PaymentID: openErr.PaymentID}
+		}
 		return nil, err
 	}
 	return row, nil
@@ -202,10 +209,8 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		}
 	}
 
-	if row.Status == ent.PaymentStatusPaid {
-		return row, false, nil
-	}
-	if row.Status == ent.PaymentStatusCancelled || row.Status == ent.PaymentStatusFailed || row.Status == ent.PaymentStatusExpired {
+	if row.Status != ent.PaymentStatusPending {
+		// Already paid/failed/cancelled/expired: idempotent no-op.
 		return row, false, nil
 	}
 
@@ -222,13 +227,8 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		}
 	}
 
-	var paidAt *time.Time
-	if nextStatus == ent.PaymentStatusPaid {
-		if in.PaidAmountTHB != nil && *in.PaidAmountTHB != row.AmountTHB {
-			return nil, false, ErrPaymentInvalidAmount
-		}
-		now := time.Now()
-		paidAt = &now
+	if nextStatus == ent.PaymentStatusPaid && in.PaidAmountTHB != nil && *in.PaidAmountTHB != row.AmountTHB {
+		return nil, false, ErrPaymentInvalidAmount
 	}
 
 	var reviewReason *string
@@ -245,23 +245,37 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		reviewedAt = &now
 	}
 
-	updated, err := s.paymentEnt.UpdatePaymentTransactionStatus(ctx, row.ID, entitiesdto.UpdatePaymentTransactionStatus{
-		Status:            nextStatus,
-		ProviderReference: in.ProviderReference,
-		PaidAt:            paidAt,
-		ReviewReason:      reviewReason,
-		ReviewedBy:        in.ReviewedBy,
-		ReviewedAt:        reviewedAt,
-		Metadata:          in.Metadata,
+	subDuration := time.Duration(s.Val.SubscriptionDays) * 24 * time.Hour
+
+	// The database-critical part (lock the row, transition it, and — for paid —
+	// lock the user and activate in the same transaction) happens atomically in
+	// the entities layer so concurrent/duplicate webhook and admin confirmation
+	// calls cannot double-transition a row or double-stack a duration.
+	txResult, err := s.paymentEnt.ConfirmPaymentTransaction(ctx, entitiesdto.ConfirmPaymentTransaction{
+		PaymentID:            row.ID,
+		NextStatus:           nextStatus,
+		ProviderReference:    in.ProviderReference,
+		ReviewReason:         reviewReason,
+		ReviewedBy:           in.ReviewedBy,
+		ReviewedAt:           reviewedAt,
+		Metadata:             in.Metadata,
+		SubscriptionDuration: subDuration,
 	})
 	if err != nil {
 		return nil, false, err
 	}
 
-	targetUser, _ := s.userEnt.GetUserByID(ctx, updated.UserID)
+	updated := txResult.Payment
+	if txResult.AlreadyTerminal {
+		// Someone else already transitioned this row between our pre-check and
+		// the transaction; idempotent no-op, same as the pre-check above.
+		return updated, false, nil
+	}
 
+	// Mail/notification/audit dispatch stays outside the DB transaction.
 	if nextStatus != ent.PaymentStatusPaid {
-		if (nextStatus == ent.PaymentStatusFailed || nextStatus == ent.PaymentStatusCancelled) {
+		if nextStatus == ent.PaymentStatusFailed || nextStatus == ent.PaymentStatusCancelled {
+			targetUser, _ := s.userEnt.GetUserByID(ctx, updated.UserID)
 			reasonStr := ""
 			if reviewReason != nil {
 				reasonStr = *reviewReason
@@ -293,25 +307,42 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 		return nil, false, err
 	}
 
-	updatedUser, err := s.userEnt.UpdateUserPlan(ctx, updated.UserID, entitiesdto.UpdateUserPlan{Plan: &planValue})
-	if err != nil {
-		return nil, false, err
+	if !txResult.Activated {
+		// Approved, but held until the user verifies their email.
+		targetUser := txResult.User
+		if targetUser == nil {
+			targetUser, _ = s.userEnt.GetUserByID(ctx, updated.UserID)
+		}
+		if s.mailer != nil && targetUser != nil && targetUser.Email != nil {
+			_ = s.mailer.SendPaymentAwaitingVerification(ctx, *targetUser.Email, planValue, true)
+		}
+		if s.notifEnt != nil {
+			link := "/billing/payments/" + updated.ID.String()
+			_, _ = s.notifEnt.CreateNotification(ctx, entitiesdto.CreateNotification{
+				UserID:     &updated.UserID,
+				TargetRole: "user",
+				Type:       "payment",
+				Title:      "ชำระเงินสำเร็จ รอการยืนยันอีเมล",
+				Message:    "การชำระเงินสำหรับแพ็กเกจ " + strings.ToUpper(updated.PlanKey) + " ได้รับการอนุมัติแล้ว กรุณายืนยันอีเมลของคุณเพื่อเปิดใช้งานแพ็กเกจ",
+				Link:       &link,
+			})
+		}
+
+		msg := fmt.Sprintf("💰 <b>Plan Purchased — Awaiting Email Verification</b>\n\n"+
+			"<b>User ID :</b> %s\n"+
+			"<b>Transaction ID :</b> %s\n"+
+			"<b>Amount :</b> %d THB\n"+
+			"<b>Plan Key :</b> %s\n"+
+			"<b>Status :</b> PAID (unactivated)\n\n"+
+			"<i>The plan will activate automatically once the user verifies their email.</i>",
+			updated.UserID.String(), updated.ID.String(), updated.AmountTHB, updated.PlanKey)
+		sendTelegramNotification(msg)
+
+		return updated, false, nil
 	}
 
-	// Stack from existing expiry if still valid, otherwise start from now.
-	subDuration := time.Duration(s.Val.SubscriptionDays) * 24 * time.Hour
-	var newExpiresAt time.Time
-	if updatedUser.PlanExpiresAt != nil && updatedUser.PlanExpiresAt.After(time.Now()) {
-		newExpiresAt = updatedUser.PlanExpiresAt.Add(subDuration)
-	} else {
-		newExpiresAt = time.Now().Add(subDuration)
-	}
-	// Renewing clears any previous cancellation intent.
-	if _, err = s.userEnt.SetUserPlanExpiry(ctx, updated.UserID, &newExpiresAt, true); err != nil {
-		return nil, false, err
-	}
-
-	if s.mailer != nil && updatedUser.Email != nil {
+	updatedUser := txResult.User
+	if s.mailer != nil && updatedUser != nil && updatedUser.Email != nil {
 		_ = s.mailer.SendSlipApproved(ctx, *updatedUser.Email, planValue, true)
 	}
 
@@ -340,6 +371,60 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 	sendTelegramNotification(msg)
 
 	return updated, true, nil
+}
+
+// ActivatePendingEntitlements activates every paid-but-unactivated transaction
+// for the given user in one transaction (see entities.Service.ActivatePendingEntitlements)
+// and emits activation mail/in-app/Telegram notifications only for rows it
+// actually activated. It is safe to call repeatedly (e.g. on a replayed
+// verification link): rows already activated are simply skipped.
+//
+// It satisfies auth.EntitlementActivator so auth.Service.VerifyEmail can call
+// it without payment importing auth (avoiding a package cycle).
+func (s *Service) ActivatePendingEntitlements(ctx context.Context, userID uuid.UUID) (bool, error) {
+	subDuration := time.Duration(s.Val.SubscriptionDays) * 24 * time.Hour
+
+	result, err := s.paymentEnt.ActivatePendingEntitlements(ctx, userID, subDuration)
+	if err != nil {
+		return false, err
+	}
+	if len(result.ActivatedPayments) == 0 {
+		return false, nil
+	}
+
+	updatedUser := result.User
+	for _, p := range result.ActivatedPayments {
+		planValue, mapErr := s.mapPlanKeyToUserPlan(p.PlanKey)
+		if mapErr != nil {
+			planValue = p.PlanKey
+		}
+
+		if s.mailer != nil && updatedUser != nil && updatedUser.Email != nil {
+			_ = s.mailer.SendSlipApproved(ctx, *updatedUser.Email, planValue, true)
+		}
+
+		if s.notifEnt != nil {
+			link := "/billing/payments/" + p.ID.String()
+			_, _ = s.notifEnt.CreateNotification(ctx, entitiesdto.CreateNotification{
+				UserID:     &userID,
+				TargetRole: "user",
+				Type:       "payment",
+				Title:      "เปิดใช้งานแพ็กเกจเรียบร้อยแล้ว",
+				Message:    "แพ็กเกจ " + strings.ToUpper(p.PlanKey) + " ของคุณได้รับการเปิดใช้งานเรียบร้อยแล้วหลังจากยืนยันอีเมลสำเร็จ",
+				Link:       &link,
+			})
+		}
+
+		msg := fmt.Sprintf("🎉 <b>Plan Activated After Email Verification!</b>\n\n"+
+			"<b>User ID :</b> %s\n"+
+			"<b>Transaction ID :</b> %s\n"+
+			"<b>Amount :</b> %d THB\n"+
+			"<b>Plan Key :</b> %s\n",
+			userID.String(), p.ID.String(), p.AmountTHB, p.PlanKey)
+		sendTelegramNotification(msg)
+	}
+
+	return true, nil
 }
 
 type SubmitSlipInput struct {
@@ -405,7 +490,8 @@ func (s *Service) AdminListPayments(ctx context.Context, limit int, offset int) 
 
 type AdminPaymentDetail struct {
 	*ent.PaymentTransactionEntity
-	User *ent.UserEntity `json:"user,omitempty"`
+	User                 *ent.UserEntity `json:"user,omitempty"`
+	AwaitingVerification bool            `json:"awaiting_verification"`
 }
 
 func (s *Service) AdminGetPayment(ctx context.Context, id uuid.UUID) (*AdminPaymentDetail, error) {
@@ -419,6 +505,7 @@ func (s *Service) AdminGetPayment(ctx context.Context, id uuid.UUID) (*AdminPaym
 
 	detail := &AdminPaymentDetail{
 		PaymentTransactionEntity: tx,
+		AwaitingVerification:     isAwaitingVerification(tx),
 	}
 
 	if user, uErr := s.userEnt.GetUserByID(ctx, tx.UserID); uErr == nil {
@@ -426,6 +513,39 @@ func (s *Service) AdminGetPayment(ctx context.Context, id uuid.UUID) (*AdminPaym
 	}
 
 	return detail, nil
+}
+
+// isAwaitingVerification reports whether a payment row is approved (paid) but
+// still waiting on the user's email verification before the entitlement takes
+// effect. Kept as a single helper so all response shapes agree on the rule.
+func isAwaitingVerification(row *ent.PaymentTransactionEntity) bool {
+	return row != nil && row.Status == ent.PaymentStatusPaid && row.ActivatedAt == nil
+}
+
+// PaymentTransactionView augments a payment transaction row with a derived
+// awaiting_verification flag so API consumers (frontend/admin) don't need to
+// duplicate the paid-but-unactivated rule.
+type PaymentTransactionView struct {
+	*ent.PaymentTransactionEntity
+	AwaitingVerification bool `json:"awaiting_verification"`
+}
+
+func NewPaymentTransactionView(row *ent.PaymentTransactionEntity) *PaymentTransactionView {
+	if row == nil {
+		return nil
+	}
+	return &PaymentTransactionView{
+		PaymentTransactionEntity: row,
+		AwaitingVerification:     isAwaitingVerification(row),
+	}
+}
+
+func NewPaymentTransactionViews(rows []*ent.PaymentTransactionEntity) []*PaymentTransactionView {
+	views := make([]*PaymentTransactionView, 0, len(rows))
+	for _, row := range rows {
+		views = append(views, NewPaymentTransactionView(row))
+	}
+	return views
 }
 
 type RefundPaymentInput struct {

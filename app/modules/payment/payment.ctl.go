@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -111,9 +112,10 @@ func (c *Controller) CreateCheckout(ctx *gin.Context) {
 	if err != nil {
 		errStr := err.Error()
 		c.recordAudit("billing.create_checkout", "failure", uuidPtr(authUserID), strPtr("plan"), nil, ctx, map[string]any{"plan_key": req.PlanKey, "provider": req.Provider, "error": errStr}, &errStr)
+		var openErr *ErrPaymentOpenExists
 		switch {
-		case errors.Is(err, ErrEmailVerificationRequired):
-			base.ValidateFailed(ctx, err.Error(), gin.H{"error": err.Error()})
+		case errors.As(err, &openErr):
+			base.JSON(ctx, http.StatusConflict, err.Error(), gin.H{"error": err.Error(), "payment_id": openErr.PaymentID}, nil)
 		case errors.Is(err, ErrPaymentPlanUnavailable):
 			base.BadRequest(ctx, err.Error(), nil)
 		default:
@@ -128,7 +130,7 @@ func (c *Controller) CreateCheckout(ctx *gin.Context) {
 		c.recordAudit("billing.create_checkout", "success", uuidPtr(authUserID), strPtr("plan"), nil, ctx, map[string]any{"plan_key": req.PlanKey, "provider": req.Provider}, nil)
 	}
 
-	base.Success(ctx, result)
+	base.Success(ctx, NewPaymentTransactionView(result))
 }
 
 func (c *Controller) GetMyPayment(ctx *gin.Context) {
@@ -162,7 +164,7 @@ func (c *Controller) GetMyPayment(ctx *gin.Context) {
 		return
 	}
 
-	base.Success(ctx, result)
+	base.Success(ctx, NewPaymentTransactionView(result))
 }
 
 func (c *Controller) ListMyPayments(ctx *gin.Context) {
@@ -193,7 +195,7 @@ func (c *Controller) ListMyPayments(ctx *gin.Context) {
 		return
 	}
 
-	base.Success(ctx, rows)
+	base.Success(ctx, NewPaymentTransactionViews(rows))
 }
 
 type webhookConfirmRequest struct {
@@ -265,7 +267,7 @@ func (c *Controller) ConfirmPaymentWebhook(ctx *gin.Context) {
 	c.recordAudit("payment.webhook", "success", nil, strPtr("payment"), pid, ctx, map[string]any{"status": string(status), "is_plan_upgraded": upgraded}, nil)
 
 	base.Success(ctx, gin.H{
-		"payment":          updated,
+		"payment":          NewPaymentTransactionView(updated),
 		"is_plan_upgraded": upgraded,
 	})
 }
@@ -320,7 +322,7 @@ func (c *Controller) SubmitSlip(ctx *gin.Context) {
 	}
 
 	c.recordAudit("billing.submit_slip", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"storage_id": req.StorageID}, nil)
-	base.Success(ctx, result)
+	base.Success(ctx, NewPaymentTransactionView(result))
 }
 
 // GetPaymentMethods handles GET /billing/payment-methods
@@ -447,7 +449,7 @@ func (c *Controller) AdminConfirmPayment(ctx *gin.Context) {
 	c.recordAudit("admin.payment.confirm", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"status": string(status), "is_plan_upgraded": upgraded}, nil)
 
 	base.Success(ctx, gin.H{
-		"payment":          updated,
+		"payment":          NewPaymentTransactionView(updated),
 		"is_plan_upgraded": upgraded,
 	})
 }
@@ -500,7 +502,7 @@ func (c *Controller) AdminRefundPayment(ctx *gin.Context) {
 
 	c.recordAudit("admin.payment.refund", "success", uuidPtr(authUserID), strPtr("payment"), uuidPtr(paymentID), ctx, map[string]any{"reason": req.Reason}, nil)
 
-	base.Success(ctx, updated)
+	base.Success(ctx, NewPaymentTransactionView(updated))
 }
 
 // CancelSubscription handles POST /billing/cancel — marks the subscription as cancelled.

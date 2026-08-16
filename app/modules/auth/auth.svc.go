@@ -25,14 +25,15 @@ import (
 )
 
 type Service struct {
-	tracer   trace.Tracer
-	user     entitiesinf.UserEntity
-	auth     entitiesinf.AuthEntity
-	quotaEnt entitiesinf.UserQuotaEntity
-	planEnt  entitiesinf.PlanSettingEntity
-	imageEnt entitiesinf.ImageEntity
-	mailer   mailerinf.Mailer
-	conf     *config.Config[Config]
+	tracer    trace.Tracer
+	user      entitiesinf.UserEntity
+	auth      entitiesinf.AuthEntity
+	quotaEnt  entitiesinf.UserQuotaEntity
+	planEnt   entitiesinf.PlanSettingEntity
+	imageEnt  entitiesinf.ImageEntity
+	mailer    mailerinf.Mailer
+	activator EntitlementActivator
+	conf      *config.Config[Config]
 }
 
 type Options struct {
@@ -488,6 +489,17 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 		return err
 	}
 
+	// Activate any plan entitlement that was approved while the email was
+	// still unverified. If this fails, do NOT delete the verification token:
+	// replaying the same verification link safely retries (SetUserEmailVerified
+	// is idempotent and ActivatePendingEntitlements only ever activates rows
+	// still missing activated_at), so no user-visible state is lost.
+	if s.activator != nil {
+		if _, err := s.activator.ActivatePendingEntitlements(ctx, token.UserID); err != nil {
+			return err
+		}
+	}
+
 	_ = s.user.DeleteEmailVerificationToken(ctx, token.ID)
 
 	return nil
@@ -505,4 +517,3 @@ func (s *Service) ResendVerificationEmail(ctx context.Context, userID uuid.UUID)
 
 	return s.SendEmailVerification(ctx, user)
 }
-

@@ -27,11 +27,11 @@ type Config struct {
 	// (frontend and API on different registrable domains) require "none", which
 	// browsers only honour together with Secure.
 	RefreshCookieSameSite string
-	GoogleClientID         string
-	GoogleClientSecret     string
-	GoogleRedirectURL      string
-	GoogleStateTTLSeconds  int
-	FrontendURL            string
+	GoogleClientID        string
+	GoogleClientSecret    string
+	GoogleRedirectURL     string
+	GoogleStateTTLSeconds int
+	FrontendURL           string
 }
 
 func New(conf *config.Config[Config], userEnt entitiesinf.UserEntity, authEnt entitiesinf.AuthEntity, quotaEnt entitiesinf.UserQuotaEntity, planEnt entitiesinf.PlanSettingEntity) *Module {
@@ -91,3 +91,10 @@ func (m *Module) SetImageEntity(imageEnt entitiesinf.ImageEntity) {
 	m.Svc.imageEnt = imageEnt
 }
 
+// SetEntitlementActivator injects the payment module's entitlement activator
+// so VerifyEmail can activate a held (paid-but-unverified) plan upgrade
+// without payment/auth forming a package import cycle. Must be called after
+// both New() and the payment module have been constructed.
+func (m *Module) SetEntitlementActivator(activator EntitlementActivator) {
+	m.Svc.activator = activator
+}
