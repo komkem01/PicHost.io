@@ -32,6 +32,13 @@ func (c *Controller) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		user, err := c.svc.user.GetUserByID(ctx.Request.Context(), userID)
+		if err != nil || !user.IsActive {
+			base.Unauthorized(ctx, i18n.Unauthorized, nil)
+			ctx.Abort()
+			return
+		}
+
 		ctx.Set("auth_user_id", userID)
 		ctx.Next()
 	}

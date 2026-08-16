@@ -34,9 +34,9 @@ func (c *Controller) AdminMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// --- 2. Load user and verify is_admin ---
+		// --- 2. Load user and verify is_admin and is_active ---
 		user, err := c.svc.user.GetUserByID(ctx.Request.Context(), userID)
-		if err != nil || !user.IsAdmin {
+		if err != nil || !user.IsAdmin || !user.IsActive {
 			base.Forbidden(ctx, "admin access required", nil)
 			ctx.Abort()
 			return
