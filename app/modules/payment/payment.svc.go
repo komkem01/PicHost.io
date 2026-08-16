@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +33,8 @@ type Options struct {
 
 type Service struct {
 	*Options
-	mailer mailerinf.Mailer
+	mailer   mailerinf.Mailer
+	notifEnt entitiesinf.NotificationEntity
 }
 
 func newService(opt *Options) *Service {
@@ -259,12 +261,29 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 	targetUser, _ := s.userEnt.GetUserByID(ctx, updated.UserID)
 
 	if nextStatus != ent.PaymentStatusPaid {
-		if (nextStatus == ent.PaymentStatusFailed || nextStatus == ent.PaymentStatusCancelled) && s.mailer != nil && targetUser != nil && targetUser.Email != nil {
+		if (nextStatus == ent.PaymentStatusFailed || nextStatus == ent.PaymentStatusCancelled) {
 			reasonStr := ""
 			if reviewReason != nil {
 				reasonStr = *reviewReason
 			}
-			_ = s.mailer.SendSlipRejected(ctx, *targetUser.Email, reasonStr, true)
+			if s.mailer != nil && targetUser != nil && targetUser.Email != nil {
+				_ = s.mailer.SendSlipRejected(ctx, *targetUser.Email, reasonStr, true)
+			}
+			if s.notifEnt != nil {
+				link := "/billing/payments/" + updated.ID.String()
+				msg := "สลิปการชำระเงินสำหรับแพ็กเกจ " + strings.ToUpper(updated.PlanKey) + " ไม่ผ่านการอนุมัติ"
+				if reasonStr != "" {
+					msg += " เนื่องจาก: " + reasonStr
+				}
+				_, _ = s.notifEnt.CreateNotification(ctx, entitiesdto.CreateNotification{
+					UserID:     &updated.UserID,
+					TargetRole: "user",
+					Type:       "payment",
+					Title:      "การชำระเงินไม่ผ่านการอนุมัติ",
+					Message:    msg,
+					Link:       &link,
+				})
+			}
 		}
 		return updated, false, nil
 	}
@@ -294,6 +313,19 @@ func (s *Service) ConfirmPayment(ctx context.Context, in ConfirmPaymentInput) (*
 
 	if s.mailer != nil && updatedUser.Email != nil {
 		_ = s.mailer.SendSlipApproved(ctx, *updatedUser.Email, planValue, true)
+	}
+
+	// Dispatch In-App Notification to User
+	if s.notifEnt != nil {
+		link := "/billing/payments/" + updated.ID.String()
+		_, _ = s.notifEnt.CreateNotification(ctx, entitiesdto.CreateNotification{
+			UserID:     &updated.UserID,
+			TargetRole: "user",
+			Type:       "payment",
+			Title:      "อนุมัติการชำระเงินเรียบร้อยแล้ว",
+			Message:    "แพ็กเกจ " + strings.ToUpper(updated.PlanKey) + " ของคุณได้รับการเปิดใช้งานเรียบร้อยแล้ว ขอขอบคุณที่ใช้บริการ PicHost.io",
+			Link:       &link,
+		})
 	}
 
 	// Send telegram notification on plan purchase & confirmation
@@ -342,6 +374,18 @@ func (s *Service) SubmitSlip(ctx context.Context, in SubmitSlipInput) (*ent.Paym
 		return nil, err
 	}
 
+	// Dispatch In-App Notification to Admins
+	if s.notifEnt != nil {
+		link := "/admin/payments/" + row.ID.String()
+		_, _ = s.notifEnt.CreateNotification(ctx, entitiesdto.CreateNotification{
+			TargetRole: "admin",
+			Type:       "payment",
+			Title:      "มีสลิปโอนเงินใหม่รอตรวจสอบ",
+			Message:    "ผู้ใช้ได้ส่งหลักฐานการโอนเงินจำนวน " + strconv.Itoa(row.AmountTHB) + " บาท สำหรับแพ็กเกจ " + strings.ToUpper(row.PlanKey),
+			Link:       &link,
+		})
+	}
+
 	// Send telegram notification on slip submission
 	msg := fmt.Sprintf("🔔 <b>New Payment Slip Submitted!</b>\n\n"+
 		"<b>User ID :</b> %s\n"+
@@ -357,6 +401,31 @@ func (s *Service) SubmitSlip(ctx context.Context, in SubmitSlipInput) (*ent.Paym
 
 func (s *Service) AdminListPayments(ctx context.Context, limit int, offset int) ([]*ent.PaymentTransactionEntity, int, error) {
 	return s.paymentEnt.ListPaymentTransactions(ctx, limit, offset)
+}
+
+type AdminPaymentDetail struct {
+	*ent.PaymentTransactionEntity
+	User *ent.UserEntity `json:"user,omitempty"`
+}
+
+func (s *Service) AdminGetPayment(ctx context.Context, id uuid.UUID) (*AdminPaymentDetail, error) {
+	tx, err := s.paymentEnt.GetPaymentTransactionByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPaymentNotFound
+		}
+		return nil, err
+	}
+
+	detail := &AdminPaymentDetail{
+		PaymentTransactionEntity: tx,
+	}
+
+	if user, uErr := s.userEnt.GetUserByID(ctx, tx.UserID); uErr == nil {
+		detail.User = user
+	}
+
+	return detail, nil
 }
 
 type RefundPaymentInput struct {
@@ -398,6 +467,19 @@ func (s *Service) RefundPayment(ctx context.Context, in RefundPaymentInput) (*en
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// In-App Notification to User
+	if s.notifEnt != nil {
+		link := "/billing/payments/" + updated.ID.String()
+		_, _ = s.notifEnt.CreateNotification(ctx, entitiesdto.CreateNotification{
+			UserID:     &updated.UserID,
+			TargetRole: "user",
+			Type:       "payment",
+			Title:      "คืนเงินการชำระเงินเรียบร้อยแล้ว",
+			Message:    "รายการชำระเงินจำนวน " + strconv.Itoa(updated.AmountTHB) + " บาท สำหรับแพ็กเกจ " + strings.ToUpper(updated.PlanKey) + " ได้รับการคืนเงินแล้ว",
+			Link:       &link,
+		})
 	}
 
 	msg := fmt.Sprintf("💸 <b>Payment Refunded!</b>\n\n"+

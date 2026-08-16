@@ -306,3 +306,14 @@ func (s *Service) DeleteEmailVerificationToken(ctx context.Context, id uuid.UUID
 	return err
 }
 
+func (s *Service) RecordUserLogin(ctx context.Context, id uuid.UUID, ip *string) error {
+	now := time.Now()
+	_, err := s.db.NewUpdate().
+		TableExpr("users").
+		Set("last_login_at = ?, login_count = login_count + 1, last_login_ip = ?, updated_at = ?", now, ip, now).
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+

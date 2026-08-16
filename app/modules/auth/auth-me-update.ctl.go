@@ -36,6 +36,8 @@ func (c *Controller) UpdateMe(ctx *gin.Context) {
 
 	user, err := c.svc.UpdateMe(ctx.Request.Context(), userID, req.Username, req.Email)
 	if err != nil {
+		c.recordAudit("auth.me_update", "failure", uuidPtr(userID), strPtr("user"), uuidPtr(userID),
+			ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"error": err.Error()}, strPtr(err.Error()))
 		if errors.Is(err, ErrAuthUnauthorized) {
 			base.Unauthorized(ctx, i18n.Unauthorized, nil)
 			return

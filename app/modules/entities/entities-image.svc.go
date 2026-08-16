@@ -179,7 +179,8 @@ func (s *Service) ListAllImages(ctx context.Context, limit int, offset int) ([]*
 	count, err := s.db.NewSelect().
 		Model(&images).
 		Relation("Storage").
-		Order("created_at DESC").
+		Relation("User").
+		OrderExpr("i.created_at DESC").
 		Limit(limit).
 		Offset(offset).
 		ScanAndCount(ctx)

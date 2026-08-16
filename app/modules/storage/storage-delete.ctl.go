@@ -35,6 +35,8 @@ func (c *Controller) DeleteFile(ctx *gin.Context) {
 	}
 
 	if err := c.svc.DeleteFile(ctx.Request.Context(), id, userID); err != nil {
+		errStr := err.Error()
+		c.recordAudit("storage.delete_file", "failure", uuidPtr(userID), strPtr("storage"), uuidPtr(id), ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"file_id": id.String(), "error": errStr}, &errStr)
 		if errors.Is(err, ErrStorageNotFound) {
 			_ = base.JSON(ctx, 404, i18n.BadRequest, nil, nil)
 			return
@@ -43,5 +45,6 @@ func (c *Controller) DeleteFile(ctx *gin.Context) {
 		return
 	}
 
+	c.recordAudit("storage.delete_file", "success", uuidPtr(userID), strPtr("storage"), uuidPtr(id), ctx.ClientIP(), ctx.GetHeader("User-Agent"), map[string]any{"file_id": id.String()}, nil)
 	base.Success(ctx, nil)
 }

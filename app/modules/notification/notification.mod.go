@@ -1,8 +1,6 @@
-package audit
+package notification
 
 import (
-	"context"
-
 	entitiesinf "pichost.io/app/modules/entities/inf"
 	"pichost.io/internal/config"
 
@@ -16,12 +14,10 @@ type Module struct {
 
 type Config struct{}
 
-func New(conf *config.Config[Config], auditEnt entitiesinf.AuditEntity) *Module {
+func New(conf *config.Config[Config], notifEnt entitiesinf.NotificationEntity) *Module {
 	tracer := otel.GetTracerProvider().Tracer(conf.AppName())
 
-	svc := newService(auditEnt)
-	svc.StartRetentionCleaner(context.Background(), 30)
-
+	svc := newService(notifEnt)
 	ctl := newController(tracer, svc)
 	return &Module{Svc: svc, Ctl: ctl}
 }

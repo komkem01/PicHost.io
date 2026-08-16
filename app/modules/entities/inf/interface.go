@@ -26,6 +26,7 @@ type UserEntity interface {
 	SetUserAdmin(ctx context.Context, id uuid.UUID, isAdmin bool) error
 	SetUserEmailVerified(ctx context.Context, id uuid.UUID) (*ent.UserEntity, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	RecordUserLogin(ctx context.Context, id uuid.UUID, ip *string) error
 
 	CreatePasswordResetToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (*ent.PasswordResetTokenEntity, error)
 	GetPasswordResetTokenByHash(ctx context.Context, tokenHash string) (*ent.PasswordResetTokenEntity, error)
@@ -45,6 +46,9 @@ type StorageEntity interface {
 	GetStorageByEmail(ctx context.Context, email string) (*ent.StorageEntity, error)
 	UpdateStorage(ctx context.Context, id uuid.UUID, storage entitiesdto.UpdateStorage) (*ent.StorageEntity, error)
 	DeleteStorage(ctx context.Context, id uuid.UUID) error
+	GetStorageStats(ctx context.Context) (*entitiesdto.StorageStats, error)
+	ListOrphanedStorage(ctx context.Context, limit int, offset int) ([]*ent.StorageEntity, int, error)
+	CleanupOrphanedStorage(ctx context.Context, ids []uuid.UUID) (int64, error)
 }
 
 type ImageEntity interface {
@@ -99,5 +103,23 @@ type PaymentTransactionEntity interface {
 type AuditEntity interface {
 	CreateAuditLog(ctx context.Context, log entitiesdto.CreateAuditLog) error
 	ListAuditLogs(ctx context.Context, filter entitiesdto.ListAuditLogsFilter) ([]*ent.AuditLogEntity, int, error)
+	DeleteAuditLogsOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
+}
+
+type LegalDocumentEntity interface {
+	ListLegalDocuments(ctx context.Context) ([]*ent.LegalDocumentEntity, error)
+	GetLegalDocumentByKey(ctx context.Context, key string) (*ent.LegalDocumentEntity, error)
+	UpsertLegalDocument(ctx context.Context, input entitiesdto.UpsertLegalDocument) (*ent.LegalDocumentEntity, error)
+	DeleteLegalDocumentByKey(ctx context.Context, key string) error
+}
+
+type NotificationEntity interface {
+	CreateNotification(ctx context.Context, in entitiesdto.CreateNotification) (*ent.NotificationEntity, error)
+	GetNotificationByID(ctx context.Context, id uuid.UUID) (*ent.NotificationEntity, error)
+	ListNotifications(ctx context.Context, filter entitiesdto.NotificationFilter) ([]*ent.NotificationEntity, int, error)
+	GetUnreadCount(ctx context.Context, userID *uuid.UUID, targetRole string) (int, error)
+	MarkAsRead(ctx context.Context, id uuid.UUID, userID *uuid.UUID) error
+	MarkAllAsRead(ctx context.Context, userID *uuid.UUID, targetRole string) error
+	DeleteNotification(ctx context.Context, id uuid.UUID, userID *uuid.UUID) error
 }
 

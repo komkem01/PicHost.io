@@ -147,5 +147,6 @@ func Router(app *gin.Engine, mod *modules.Modules) {
 	apiAuth(app.Group("/api/v1"), mod)
 	apiBilling(app.Group("/api/v1"), mod)
 	apiAdmin(app.Group("/api/v1"), mod)
+	apiNotifications(app.Group("/api/v1"), mod)
 }
 

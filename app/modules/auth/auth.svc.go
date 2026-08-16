@@ -162,6 +162,8 @@ func (s *Service) issueAuth(ctx context.Context, user *ent.UserEntity, userAgent
 		return nil, err
 	}
 
+	_ = s.user.RecordUserLogin(ctx, user.ID, ipAddr)
+
 	return &AuthResultService{
 		AccessToken:  accessToken,
 		AccessExpiry: s.conf.Val.AccessTokenTTLSeconds,

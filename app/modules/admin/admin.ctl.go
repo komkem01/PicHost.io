@@ -1,10 +1,11 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
-
+	"time"
 
 	entitiesdto "pichost.io/app/modules/entities/dto"
 	entitiesinf "pichost.io/app/modules/entities/inf"
@@ -32,22 +33,28 @@ func getAdminID(ctx *gin.Context) uuid.UUID {
 	return id
 }
 
-func (c *Controller) recordAudit(action, status string, adminID uuid.UUID, ctx *gin.Context) {
+func (c *Controller) recordAudit(action, status string, adminID uuid.UUID, ctx *gin.Context, meta map[string]any, errCode *string) {
 	if c.auditEnt == nil {
 		return
 	}
 	ip := ctx.ClientIP()
 	ua := ctx.GetHeader("User-Agent")
 	go func() {
-		_ = c.auditEnt.CreateAuditLog(ctx.Request.Context(), entitiesdto.CreateAuditLog{
+		reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = c.auditEnt.CreateAuditLog(reqCtx, entitiesdto.CreateAuditLog{
 			UserID:    &adminID,
 			Action:    action,
 			IPAddress: &ip,
 			UserAgent: &ua,
 			Status:    status,
+			Metadata:  meta,
+			ErrorCode: errCode,
 		})
 	}()
 }
+
+func strPtr(s string) *string { return &s }
 
 // GET /admin/stats
 func (c *Controller) Stats(ctx *gin.Context) {
@@ -149,10 +156,11 @@ func (c *Controller) UpsertPlanSetting(ctx *gin.Context) {
 		WatermarkRemoval:  req.WatermarkRemoval,
 	})
 	if err != nil {
+		c.recordAudit("admin.upsert_plan_setting", "failure", getAdminID(ctx), ctx, map[string]any{"plan_key": key, "error": err.Error()}, strPtr(err.Error()))
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
-	c.recordAudit("admin.upsert_plan_setting", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.upsert_plan_setting", "success", getAdminID(ctx), ctx, map[string]any{"plan_key": key}, nil)
 	base.Success(ctx, plan)
 }
 
@@ -165,6 +173,7 @@ func (c *Controller) DeletePlanSetting(ctx *gin.Context) {
 	}
 
 	if err := c.svc.DeletePlanSetting(ctx.Request.Context(), key); err != nil {
+		c.recordAudit("admin.delete_plan_setting", "failure", getAdminID(ctx), ctx, map[string]any{"plan_key": key, "error": err.Error()}, strPtr(err.Error()))
 		if errors.Is(err, errPlanInUse) {
 			base.BadRequest(ctx, "plan is currently assigned to users", nil)
 			return
@@ -177,7 +186,7 @@ func (c *Controller) DeletePlanSetting(ctx *gin.Context) {
 		return
 	}
 
-	c.recordAudit("admin.delete_plan_setting", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.delete_plan_setting", "success", getAdminID(ctx), ctx, map[string]any{"plan_key": key}, nil)
 	base.Success(ctx, gin.H{"ok": true})
 }
 
@@ -234,6 +243,7 @@ func (c *Controller) SetUserPlan(ctx *gin.Context) {
 		return
 	}
 	if err := c.svc.SetUserPlan(ctx.Request.Context(), id, req.Plan); err != nil {
+		c.recordAudit("admin.set_user_plan", "failure", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "plan": req.Plan, "error": err.Error()}, strPtr(err.Error()))
 		if errors.Is(err, errInvalidPlan) {
 			base.BadRequest(ctx, "invalid plan value", nil)
 			return
@@ -241,7 +251,7 @@ func (c *Controller) SetUserPlan(ctx *gin.Context) {
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
-	c.recordAudit("admin.set_user_plan", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.set_user_plan", "success", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "plan": req.Plan}, nil)
 	base.Success(ctx, gin.H{"ok": true})
 }
 
@@ -260,10 +270,11 @@ func (c *Controller) SetUserActive(ctx *gin.Context) {
 		return
 	}
 	if err := c.svc.SetUserActive(ctx.Request.Context(), id, req.IsActive); err != nil {
+		c.recordAudit("admin.set_user_active", "failure", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "is_active": req.IsActive, "error": err.Error()}, strPtr(err.Error()))
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
-	c.recordAudit("admin.set_user_active", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.set_user_active", "success", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "is_active": req.IsActive}, nil)
 	base.Success(ctx, gin.H{"ok": true})
 }
 
@@ -282,10 +293,11 @@ func (c *Controller) SetUserAdmin(ctx *gin.Context) {
 		return
 	}
 	if err := c.svc.SetUserAdmin(ctx.Request.Context(), id, req.IsAdmin); err != nil {
+		c.recordAudit("admin.set_user_admin", "failure", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "is_admin": req.IsAdmin, "error": err.Error()}, strPtr(err.Error()))
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
-	c.recordAudit("admin.set_user_admin", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.set_user_admin", "success", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "is_admin": req.IsAdmin}, nil)
 	base.Success(ctx, gin.H{"ok": true})
 }
 
@@ -307,10 +319,11 @@ func (c *Controller) UpdateProfile(ctx *gin.Context) {
 	}
 	u, err := c.svc.UpdateUserProfile(ctx.Request.Context(), id, req.Email, req.Username)
 	if err != nil {
+		c.recordAudit("admin.update_user_profile", "failure", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "error": err.Error()}, strPtr(err.Error()))
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
-	c.recordAudit("admin.update_user_profile", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.update_user_profile", "success", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String()}, nil)
 	base.Success(ctx, u)
 }
 
@@ -321,10 +334,11 @@ func (c *Controller) DeleteUser(ctx *gin.Context) {
 		return
 	}
 	if err := c.svc.DeleteUser(ctx.Request.Context(), id); err != nil {
+		c.recordAudit("admin.delete_user", "failure", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "error": err.Error()}, strPtr(err.Error()))
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
-	c.recordAudit("admin.delete_user", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.delete_user", "success", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String()}, nil)
 	base.Success(ctx, gin.H{"ok": true})
 }
 
@@ -362,12 +376,226 @@ func (c *Controller) DeleteImage(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.svc.DeleteImageByAdmin(ctx.Request.Context(), id); err != nil {
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = ctx.ShouldBindJSON(&req)
+
+	if err := c.svc.DeleteImageByAdmin(ctx.Request.Context(), id, req.Reason); err != nil {
+		c.recordAudit("admin.delete_image", "failure", getAdminID(ctx), ctx, map[string]any{"image_id": id.String(), "reason": req.Reason, "error": err.Error()}, strPtr(err.Error()))
 		base.InternalServerError(ctx, i18n.InternalError, nil)
 		return
 	}
 
-	c.recordAudit("admin.delete_image", "success", getAdminID(ctx), ctx)
+	c.recordAudit("admin.delete_image", "success", getAdminID(ctx), ctx, map[string]any{"image_id": id.String(), "reason": req.Reason}, nil)
 	base.Success(ctx, gin.H{"ok": true})
 }
+
+// --- Legal Documents ---
+
+// GET /public/legal
+func (c *Controller) ListPublicLegalDocuments(ctx *gin.Context) {
+	docs, err := c.svc.ListLegalDocuments(ctx.Request.Context())
+	if err != nil {
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+	base.Success(ctx, docs)
+}
+
+// GET /public/legal/:key
+func (c *Controller) GetPublicLegalDocument(ctx *gin.Context) {
+	key := ctx.Param("key")
+	doc, err := c.svc.GetLegalDocumentByKey(ctx.Request.Context(), key)
+	if err != nil {
+		base.BadRequest(ctx, "document not found", nil)
+		return
+	}
+	base.Success(ctx, doc)
+}
+
+// GET /admin/legal
+func (c *Controller) ListLegalDocuments(ctx *gin.Context) {
+	docs, err := c.svc.ListLegalDocuments(ctx.Request.Context())
+	if err != nil {
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+	base.Success(ctx, docs)
+}
+
+// GET /admin/legal/:key
+func (c *Controller) GetLegalDocument(ctx *gin.Context) {
+	key := ctx.Param("key")
+	doc, err := c.svc.GetLegalDocumentByKey(ctx.Request.Context(), key)
+	if err != nil {
+		base.BadRequest(ctx, "document not found", nil)
+		return
+	}
+	base.Success(ctx, doc)
+}
+
+// PUT /admin/legal/:key
+func (c *Controller) UpsertLegalDocument(ctx *gin.Context) {
+	key := ctx.Param("key")
+	var req struct {
+		Title   string `json:"title" binding:"required"`
+		Content string `json:"content" binding:"required"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	doc, err := c.svc.UpsertLegalDocument(ctx.Request.Context(), entitiesdto.UpsertLegalDocument{
+		Key:     key,
+		Title:   req.Title,
+		Content: req.Content,
+	})
+	if err != nil {
+		c.recordAudit("admin.upsert_legal_document", "failure", getAdminID(ctx), ctx, map[string]any{"key": key, "error": err.Error()}, strPtr(err.Error()))
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+	c.recordAudit("admin.upsert_legal_document", "success", getAdminID(ctx), ctx, map[string]any{"key": key}, nil)
+	base.Success(ctx, doc)
+}
+
+// DELETE /admin/legal/:key
+func (c *Controller) DeleteLegalDocument(ctx *gin.Context) {
+	key := ctx.Param("key")
+	if err := c.svc.DeleteLegalDocumentByKey(ctx.Request.Context(), key); err != nil {
+		c.recordAudit("admin.delete_legal_document", "failure", getAdminID(ctx), ctx, map[string]any{"key": key, "error": err.Error()}, strPtr(err.Error()))
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+	c.recordAudit("admin.delete_legal_document", "success", getAdminID(ctx), ctx, map[string]any{"key": key}, nil)
+	base.Success(ctx, gin.H{"ok": true})
+}
+
+// POST /admin/users/:id/reset-password
+func (c *Controller) ResetUserPassword(ctx *gin.Context) {
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	var req struct {
+		Password string `json:"password" binding:"required,min=8"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	if err := c.svc.ResetUserPassword(ctx.Request.Context(), id, req.Password); err != nil {
+		c.recordAudit("admin.reset_user_password", "failure", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String(), "error": err.Error()}, strPtr(err.Error()))
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+
+	c.recordAudit("admin.reset_user_password", "success", getAdminID(ctx), ctx, map[string]any{"target_user_id": id.String()}, nil)
+	base.Success(ctx, gin.H{"ok": true, "message": "password reset successfully"})
+}
+
+// POST /admin/images/bulk-delete
+func (c *Controller) BulkDeleteImages(ctx *gin.Context) {
+	var req struct {
+		ImageIDs []string `json:"image_ids" binding:"required"`
+		Reason   string   `json:"reason"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil || len(req.ImageIDs) == 0 {
+		base.BadRequest(ctx, i18n.InvalidRequestForm, nil)
+		return
+	}
+
+	uuids := make([]uuid.UUID, 0, len(req.ImageIDs))
+	for _, idStr := range req.ImageIDs {
+		if uid, err := uuid.Parse(idStr); err == nil {
+			uuids = append(uuids, uid)
+		}
+	}
+
+	count, err := c.svc.BulkDeleteImagesByAdmin(ctx.Request.Context(), uuids, req.Reason)
+	if err != nil {
+		c.recordAudit("admin.bulk_delete_images", "failure", getAdminID(ctx), ctx, map[string]any{"requested": len(req.ImageIDs), "reason": req.Reason, "error": err.Error()}, strPtr(err.Error()))
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+
+	c.recordAudit("admin.bulk_delete_images", "success", getAdminID(ctx), ctx, map[string]any{"deleted_count": count, "reason": req.Reason}, nil)
+	base.Success(ctx, gin.H{"ok": true, "deleted_count": count})
+}
+
+// --- Storage Management Endpoints ---
+
+// GET /admin/storage/stats
+func (c *Controller) GetStorageStats(ctx *gin.Context) {
+	stats, err := c.svc.GetStorageStats(ctx.Request.Context())
+	if err != nil {
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+	base.Success(ctx, stats)
+}
+
+// GET /admin/storage/orphaned
+func (c *Controller) ListOrphanedStorage(ctx *gin.Context) {
+	limit, _ := strconv.Atoi(ctx.Query("limit"))
+	page, _ := strconv.Atoi(ctx.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	storages, total, err := c.svc.ListOrphanedStorage(ctx.Request.Context(), limit, offset)
+	if err != nil {
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+
+	base.Success(ctx, gin.H{
+		"items": storages,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+// POST /admin/storage/cleanup
+func (c *Controller) CleanupOrphanedStorage(ctx *gin.Context) {
+	var req struct {
+		StorageIDs []string `json:"storage_ids"`
+		IDs        []string `json:"ids"`
+	}
+	_ = ctx.ShouldBindJSON(&req)
+
+	rawIDs := req.StorageIDs
+	if len(rawIDs) == 0 {
+		rawIDs = req.IDs
+	}
+
+	var uuids []uuid.UUID
+	for _, idStr := range rawIDs {
+		if uid, err := uuid.Parse(idStr); err == nil {
+			uuids = append(uuids, uid)
+		}
+	}
+
+	affected, err := c.svc.CleanupOrphanedStorage(ctx.Request.Context(), uuids)
+	if err != nil {
+		c.recordAudit("admin.storage_cleanup", "failure", getAdminID(ctx), ctx, map[string]any{"error": err.Error()}, strPtr(err.Error()))
+		base.InternalServerError(ctx, i18n.InternalError, nil)
+		return
+	}
+
+	c.recordAudit("admin.storage_cleanup", "success", getAdminID(ctx), ctx, map[string]any{"cleaned_files": affected}, nil)
+	base.Success(ctx, gin.H{"ok": true, "cleaned_count": affected, "deleted_count": affected})
+}
+
+
 
